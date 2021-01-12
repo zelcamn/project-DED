@@ -1,1 +1,2 @@
 print('s')
+print('s')
