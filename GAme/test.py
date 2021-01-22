@@ -3,6 +3,7 @@ import sys
 from random import randint
 
 import pygame
+import pytmx
 
 
 width, height = 600, 600
@@ -28,35 +29,21 @@ def load_image(name, colorkey=None):
     return image
 
 
-
-
-
-def render(arr_groups, screen):
-    if not(isinstance(arr_groups, list)):
-        raise TypeError("arr_groups must be list")
-    for group in arr_groups:
-        if isinstance(group, pygame.sprite.Group):
-            group.draw(screen)
-        else:
-            print("Erore of layer number", arr_groups.index(group))
-
-
-def update(arr_groups):
-    if not(isinstance(arr_groups, list)):
-        raise TypeError("arr_groups must be list")
-    for group in arr_groups:
-        if isinstance(group, pygame.sprite.Group):
-            group.update()
-        else:
-            print("Erore of layer number", arr_groups.index(group))
-
-
 class Platform(pygame.sprite.Sprite):
     def __init__(self, width, heigth, pos, group):
         super().__init__(group)
         self.image = pygame.Surface((width, heigth))
         self.rect = self.image.get_rect()
         self.image.fill("gray")
+        self.rect.x = pos[0]
+        self.rect.y = pos[1]
+
+
+class Mask_Platform(pygame.sprite.Sprite):
+    def __init__(self, pos, group, image):
+        super().__init__(group)
+        self.image = image
+        self.rect = self.image.get_rect()
         self.rect.x = pos[0]
         self.rect.y = pos[1]
 
@@ -242,47 +229,53 @@ class Objectile(pygame.sprite.Sprite):
 
 
 class Level:
-    def __init__(self, file, summon_time=500, end_time=500):
+    def __init__(self, file, wrez, hrez, summon_time=500, end_time=500):
         self.enemys = []
         self.summon_time = summon_time
         self.end_time = end_time
         self.end_time_run = False
-        with open(file, mode="r", encoding="utf-8") as fil:
-            self.arr = fil.readlines()
-            self.width = int(self.arr[0].split()[0])
-            self.heigth = int(self.arr[0].split()[1])
-            self.back_ground = self.arr[0].split()[2]
 
-            self.map = [i.split() for i in self.arr[2::]]
+        self.map = pytmx.load_pygame(f"{file}")
 
-            self.plaer_group = pygame.sprite.Group()
-            self.vertical_platforms_up = pygame.sprite.Group()
-            self.vertical_platforms_down = pygame.sprite.Group()
-            self.horisontal_platform_left = pygame.sprite.Group()
-            self.horisontal_platform_rigth = pygame.sprite.Group()
-            self.mask_platforms = pygame.sprite.Group()
-            self.enemy_group = pygame.sprite.Group()
-            self.objectile_group = pygame.sprite.Group()
+        self.width_res = wrez
+        self.heigth_res = hrez
 
-            self.arr_groups = [self.plaer_group, self.vertical_platforms_up,
-            self.vertical_platforms_down, self.horisontal_platform_left,
-            self.horisontal_platform_rigth, self.enemy_group, self.objectile_group, self.mask_platforms]
+        self.plaer_group = pygame.sprite.Group()
+        self.vertical_platforms_up = pygame.sprite.Group()
+        self.vertical_platforms_down = pygame.sprite.Group()
+        self.horisontal_platform_left = pygame.sprite.Group()
+        self.horisontal_platform_rigth = pygame.sprite.Group()
+        self.mask_platforms = pygame.sprite.Group()
+        self.enemy_group = pygame.sprite.Group()
+        self.objectile_group = pygame.sprite.Group()
 
-            Platform(width, 1, (0, height - 1), self.vertical_platforms_up)
-            Platform(width, 1, (0, 0), self.vertical_platforms_down)
-            Platform(1, height, (width - 1, 0), self.horisontal_platform_left)
-            Platform(1, height, (0, 0), self.horisontal_platform_rigth)
-            print(*self.map, sep="\n")
-            for i in range(len(self.map)):
-                for j in range(len(self.map[i])):
-                    if self.map[i][j] == "1":
-                        self.create_platform(width / self.width, height / self.heigth,
-                                             (j * height / self.heigth, i * width / self.width))
+        self.arr_groups = [self.plaer_group, self.vertical_platforms_up,
+        self.vertical_platforms_down, self.horisontal_platform_left,
+        self.horisontal_platform_rigth, self.enemy_group, self.objectile_group, self.mask_platforms]
+
+        print(*self.map, sep="\n")
+        for y in range(-1, self.map.height + 1):
+            for x in range(-1, self.map.width + 1):
+                print(y, x)
+                if 0 <= y < self.map.height and 0 <= x < self.map.width:
+                    image = self.map.get_tile_image(x, y, 0)
+                    if not(image is None):
+                        self.create_platform(self.width_res, self.heigth_res, (x * self.width_res, y * self.heigth_res),
+                                                                           image)
+                else:
+                    self.create_platform(self.width_res, self.heigth_res,
+                                         (x * self.width_res, y * self.heigth_res),
+                                         pygame.Surface((int(self.width_res), int(self.heigth_res))))
+
+        total_level_width = self.map.width * self.width_res  # Высчитываем фактическую ширину уровня
+        total_level_height = self.map.height * self.heigth_res  # высоту
+
+        self.camera = Camera(camera_configure, total_level_width, total_level_height)
 
     def summon_vragov(self):
-        self.enemys = [Enemy((randint(300, 600), 10)) for i in range(int(self.arr[1].split()[0]))]
+        pass
 
-    def create_platform(self, width, heigth, pos):
+    def create_platform(self, width, heigth, pos, image):
         Platform(width - 2, 1, (pos[0] + 1, pos[1]), self.vertical_platforms_up)
         Platform(width - 2, 1,
                  (pos[0] + 1, pos[1] + heigth - 1),
@@ -293,18 +286,20 @@ class Level:
         Platform(1, heigth - 2,
                  (pos[0] + width - 1, pos[1] + 1),
                  self.horisontal_platform_rigth)
-        Platform(width, heigth, pos, self.mask_platforms)
+        Mask_Platform(pos, self.mask_platforms, image)
 
     def render(self, screen):
         if not (isinstance(self.arr_groups, list)):
             raise TypeError("arr_groups must be list")
         for group in self.arr_groups:
             if isinstance(group, pygame.sprite.Group):
-                group.draw(screen)
+                for sprite in group:
+                    screen.blit(sprite.image, self.camera.apply(sprite))
             else:
                 print("Erore of layer number", self.arr_groups.index(group))
 
     def update(self):
+        self.camera.update(plaer)
         if not (isinstance(self.arr_groups, list)):
             raise TypeError("arr_groups must be list")
         for group in self.arr_groups:
@@ -320,9 +315,34 @@ class Level:
         return True
 
 
+def camera_configure(camera, target_rect):
+    l, t, _, _ = target_rect
+    _, _, w, h = camera
+    l, t = -l + width / 2, -t + height / 2
+
+    l = min(0, l)  # Не движемся дальше левой границы
+    l = max(-(camera.width - width), l)  # Не движемся дальше правой границы
+    t = max(-(camera.height - height), t)  # Не движемся дальше нижней границы
+    t = min(0, t)  # Не движемся дальше верхней границы
+
+    return pygame.Rect(l, t, w, h)
+
+
+class Camera(object):
+    def __init__(self, camera_func, width, height):
+        self.camera_func = camera_func
+        self.state = pygame.Rect(0, 0, width, height)
+
+    def apply(self, target):
+        return target.rect.move(self.state.topleft)
+
+    def update(self, target):
+        self.state = self.camera_func(self.state, target.rect)
+
+
 def change_level():
     global level
-    level = Level(f"data\levels\\{str(randint(1, 5))}.txt")
+    level = Level(f"data\levels\\1.tmx", 60, 60)
 
 
 clock = pygame.time.Clock()
@@ -341,21 +361,21 @@ while running:
             plaer.move(event)
         if event.type == pygame.MOUSEBUTTONDOWN:
             plaer.summon_objectile()
-    if counter_start <= level.summon_time:
-        counter_start += 1
-        print(counter_start)
-    elif counter_start == level.summon_time + 1:
-        level.summon_vragov()
-        counter_start += 1
-    if counter_end <= level.end_time:
-        counter_end += 1
-        print(counter_end)
-    elif all(list(map(lambda x: x.killed, level.enemys))) and counter_end == level.end_time + 1 \
-            and counter_start >= level.summon_time:
-        change_level()
-        plaer.reload()
-        counter_start = 0
-        counter_end = 0
+    # if counter_start <= level.summon_time:
+        #     counter_start += 1
+    #     print(counter_start)
+    # elif counter_start == level.summon_time + 1:
+        #     level.summon_vragov()
+    #     counter_start += 1
+    # if counter_end <= level.end_time:
+        #     counter_end += 1
+    #     print(counter_end)
+    # elif all(list(map(lambda x: x.killed, level.enemys))) and counter_end == level.end_time + 1 \
+        #         and counter_start >= level.summon_time:
+        #     change_level()
+        #     plaer.reload()
+        #    counter_start = 0
+    #     counter_end = 0
     sc.fill("black")
     level.update()
     level.render(sc)
