@@ -7,6 +7,10 @@ import pytmx
 
 
 width, height = 600, 600
+TILE_DICT = {"platform": 1,
+             "zlov": 2,
+             "spawn": 3,
+             "door": 4}
 
 pygame.init()
 sc = pygame.display.set_mode((width, height))
@@ -147,8 +151,8 @@ class Enemy(pygame.sprite.Sprite):
     image_right = load_image("zlov_right.png", colorkey="black")
     image_left = load_image("zlov_left.png", colorkey="black")
 
-    def __init__(self, pos):
-        super().__init__(level.enemy_group)
+    def __init__(self, pos, group):
+        super().__init__(group)
         self.image = Enemy.image_left
         self.rect = self.image.get_rect()
 
@@ -248,19 +252,29 @@ class Level:
         self.mask_platforms = pygame.sprite.Group()
         self.enemy_group = pygame.sprite.Group()
         self.objectile_group = pygame.sprite.Group()
+        self.door_group = pygame.sprite.Group()
 
         self.arr_groups = [self.plaer_group, self.vertical_platforms_up,
         self.vertical_platforms_down, self.horisontal_platform_left,
-        self.horisontal_platform_rigth, self.enemy_group, self.objectile_group, self.mask_platforms]
+        self.horisontal_platform_rigth, self.enemy_group, self.objectile_group, self.mask_platforms, self.door_group]
+
+        self.start_pos = (0, 0)
 
         print(*self.map, sep="\n")
         for y in range(-1, self.map.height + 1):
             for x in range(-1, self.map.width + 1):
-                print(y, x)
                 if 0 <= y < self.map.height and 0 <= x < self.map.width:
                     image = self.map.get_tile_image(x, y, 0)
                     if not(image is None):
-                        self.create_platform(self.width_res, self.heigth_res, (x * self.width_res, y * self.heigth_res),
+                        if self.map.get_tile_gid(x, y, 0) == TILE_DICT["zlov"]:
+                            self.enemys.append(Enemy((x * self.width_res, y * self.heigth_res), self.enemy_group))
+                        elif self.map.get_tile_gid(x, y, 0) == TILE_DICT["spawn"]:
+                            self.start_pos = (x * self.width_res, y * self.heigth_res)
+                        elif self.map.get_tile_gid(x, y, 0) == TILE_DICT["door"]:
+                            self.create_door((x * self.width_res, y * self.heigth_res), image)
+                        else:
+                            self.create_platform(self.width_res, self.heigth_res,
+                                                 (x * self.width_res, y * self.heigth_res),
                                                                            image)
                 else:
                     self.create_platform(self.width_res, self.heigth_res,
@@ -272,8 +286,8 @@ class Level:
 
         self.camera = Camera(camera_configure, total_level_width, total_level_height)
 
-    def summon_vragov(self):
-        pass
+    def start(self):
+        plaer.set_pos(self.start_pos)
 
     def create_platform(self, width, heigth, pos, image):
         Platform(width - 2, 1, (pos[0] + 1, pos[1]), self.vertical_platforms_up)
@@ -287,6 +301,10 @@ class Level:
                  (pos[0] + width - 1, pos[1] + 1),
                  self.horisontal_platform_rigth)
         Mask_Platform(pos, self.mask_platforms, image)
+
+    def create_door(self, pos, image):
+        print("hi")
+        Mask_Platform(pos, self.door_group, image)
 
     def render(self, screen):
         if not (isinstance(self.arr_groups, list)):
@@ -304,7 +322,9 @@ class Level:
             raise TypeError("arr_groups must be list")
         for group in self.arr_groups:
             if isinstance(group, pygame.sprite.Group):
-                group.update()
+                for sprite in group:
+                    if self.camera.apply(sprite):
+                        sprite.update()
             else:
                 print("Erore of layer number", self.arr_groups.index(group))
 
@@ -348,11 +368,12 @@ def change_level():
 clock = pygame.time.Clock()
 level = 0
 change_level()
+plaer = Plaer((10, 10))
 counter_start = 0
 counter_end = 0
-plaer = Plaer((10, 10))
 running = True
 enemy_counter = 1
+level.start()
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT or plaer.killed:
