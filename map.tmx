@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.4" tiledversion="1.4.3" orientation="orthogonal" renderorder="right-down" width="20" height="20" tilewidth="32" tileheight="32" infinite="0" nextlayerid="6" nextobjectid="5">
+ <tileset firstgid="1" source="../../../Program Files/Tiled/examples/desert.tsx"/>
+ <layer id="1" name="Слой тайлов 1" width="20" height="20">
+  <data encoding="base64" compression="zlib">
+   eJxjYBgFo2AUjIKhBSSBWAoPlibRPEWquo565qlDaU0g1sKDtdH0KSCx9ZDYclTGAAUlBXQ=
+  </data>
+ </layer>
+ <layer id="5" name="Слой тайлов 2" width="20" height="20" opacity="0.15">
+  <data encoding="base64" compression="zlib">
+   eJxjYBgFIwXwE4nR1ZJrDrF2UdNMSt1KCFDDjOEEJIFYCglLo8mj8wkBRSBWQsLKaPLofGqaR0y80ts8UoEmEGshYW0KzSMEAGdfCZo=
+  </data>
+ </layer>
+</map>
