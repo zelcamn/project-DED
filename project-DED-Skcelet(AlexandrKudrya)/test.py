@@ -470,6 +470,7 @@ def start_play():
         for event in pygame.event.get():
             if event.type == pygame.QUIT or plaer.killed:
                 running = False
+                pygame.mixer.music.stop()
             if event.type == pygame.KEYUP or event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     pause()
