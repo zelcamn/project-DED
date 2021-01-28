@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import sys
 
 import pygame
@@ -7,10 +8,12 @@ import pytmx
 
 
 width, height = 600, 600
-TILE_DICT = {"platform": 1,
-             "zlov": 2,
-             "spawn": 3,
-             "door": 4}
+TILE_DICT = {"platform": 3,
+             "zlov": 4,
+             "spawn": 5,
+             "door": 6,
+             "heard": 7,
+             "chest": 8}
 
 pygame.init()
 sc = pygame.display.set_mode((width, height))
@@ -53,6 +56,47 @@ class Mask_Platform(pygame.sprite.Sprite):
         self.rect.y = pos[1]
 
 
+class Shower(pygame.sprite.Sprite):
+    def __init__(self, pos, group, target):
+        super().__init__(group)
+        self.f1 = pygame.font.Font(None, 36)
+        self.target = target
+        text1 = self.f1.render("", True, (180, 0, 0))
+        self.image = text1
+        self.rect = self.image.get_rect()
+        self.pos = pos
+        self.rect.x = self.pos[0]
+        self.rect.y = self.pos[1]
+
+    def update(self):
+        pass
+
+
+class Coin_Shower(Shower):
+    def __init__(self, pos, group, target):
+        super().__init__(pos, group, target)
+
+    def update(self):
+        text1 = self.f1.render(str(self.target.coins), True, (255, 200, 0))
+        self.image = text1
+        self.rect = self.image.get_rect()
+        self.rect.x = self.pos[0]
+        self.rect.y = self.pos[1]
+
+
+class Helth_Shower(Shower):
+    def __init__(self, pos, group, target):
+        super().__init__(pos, group, target)
+
+    def update(self):
+        text1 = self.f1.render(str(self.target.health), True, (180, 0, 0))
+        self.image = text1
+        self.rect = self.image.get_rect()
+        self.rect.x = self.pos[0]
+        self.rect.y = self.pos[1]
+
+
+
 class Plaer(pygame.sprite.Sprite):
     image_rigth = load_image("hero_right.jpg", colorkey="black")
     image_left = load_image("hero_left.jpg", colorkey="black")
@@ -80,6 +124,11 @@ class Plaer(pygame.sprite.Sprite):
         else:
             self.reaim_function = (lambda x, y: x + y)
 
+        self.coins = 0
+        self.health = 3
+        self.invisibility_counter_max = 100
+        self.invisibility_counter = self.invisibility_counter_max
+
     def reload(self):
         level.plaer_group.add(self)
         if pygame.sprite.spritecollide(self, level.mask_platforms, False):
@@ -87,6 +136,19 @@ class Plaer(pygame.sprite.Sprite):
             self.rect.y = 10
 
     def update(self, *args):
+        if pygame.sprite.spritecollide(self, level.enemy_group, False):
+            if self.invisibility_counter >= self.invisibility_counter_max:
+                self.health -= 1
+                self.a_y -= 20
+                if self.health <= 0:
+                    self.killed = True
+                    self.kill()
+                else:
+                    self.invisibility_counter = 0
+
+        if pygame.sprite.spritecollide(self, level.heath_group, True):
+            self.health += 1
+
         for i in range(abs(self.a_x)):
             if self.a_x > 0:
                 if not(pygame.sprite.spritecollide(self, level.horisontal_platform_left, False)):
@@ -98,20 +160,19 @@ class Plaer(pygame.sprite.Sprite):
             self.step = 1
         elif self.a_y < 0:
             self.step = -1
-        for i in range(abs(self.a_y)):
+        for i in range(abs(int(self.a_y // 2))):
             self.rect.y += 1 * self.step
             if pygame.sprite.spritecollide(self, level.vertical_platforms_up, False):
                 break
             if pygame.sprite.spritecollide(self, level.vertical_platforms_down, False):
                 self.a_y = 1
         if not(pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
-            self.a_y += 1
+            self.a_y += 0.5
         else:
             self.a_y = 0
 
-        if pygame.sprite.spritecollide(self, level.enemy_group, False):
-            self.killed = True
-            self.kill()
+        if self.invisibility_counter < self.invisibility_counter_max:
+            self.invisibility_counter += 1
 
     def set_pos(self, pos):
         self.rect.x = pos[0]
@@ -162,6 +223,7 @@ class Plaer(pygame.sprite.Sprite):
     def reaim(self, target):
         self.reaim_function((self.rect.x, self.rect.y), target)
 
+
 class Enemy(pygame.sprite.Sprite):
     image_right = load_image("zlov_right.png", colorkey="black")
     image_left = load_image("zlov_left.png", colorkey="black")
@@ -205,6 +267,7 @@ class Enemy(pygame.sprite.Sprite):
             self.a_y = 0
 
         if pygame.sprite.spritecollide(self, level.objectile_group, True):
+            plaer.coins += 10
             self.killed = True
             self.kill()
 
@@ -246,6 +309,7 @@ class Objectile_Sword(Objectile):
         self.image = pygame.Surface((10, heigth))
         self.rect = self.image.get_rect()
         self.image.fill("white")
+        self.heigth = heigth
 
         super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
 
@@ -275,6 +339,7 @@ class Objectile_Bow(Objectile):
 
         dx = abs(real.x - target_pos[0])
         dy = abs(real.y - target_pos[1])
+        self.a_y = 1
 
         if dx == 0:
             self.a_x = 0
@@ -297,13 +362,91 @@ class Objectile_Bow(Objectile):
             self.kill()
 
 
-
 class Bow:
     obj_spd = 5
     obj_live = 10
     obj_heigth = 40
     obj_type = Objectile_Bow
     is_aim = False
+
+
+class Objectile_Gun(Objectile):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+        self.image = pygame.Surface((10, 10))
+        self.rect = self.image.get_rect()
+        self.image.fill("white")
+
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+
+        dx = abs(real.x - target_pos[0])
+        dy = abs(real.y - target_pos[1])
+        self.a_y = 1
+
+        if dx == 0:
+            self.a_x = 0
+            self.y_a = a_x
+        else:
+            angle = math.atan(dy / dx)
+            self.a_x = a_x * math.cos(angle)
+            if real.y < target_pos[1]:
+                self.a_y = abs(a_x * math.sin(angle))
+            else:
+                self.a_y = -abs(a_x * math.sin(angle))
+
+
+    def update(self, *args):
+        self.rect.x += self.a_x
+        self.rect.y += self.a_y // 1
+        self.counter += 1
+        if pygame.sprite.spritecollide(self, level.mask_platforms, False):
+            self.kill()
+
+
+
+class Gun:
+    obj_spd = 5
+    obj_live = 10
+    obj_heigth = 10
+    obj_type = Objectile_Gun
+    is_aim = False
+
+
+class Objectile_Axe(Objectile):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+        self.image = pygame.Surface((100, 100))
+        self.rect = self.image.get_rect()
+        self.image.fill("white")
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+
+
+    def update(self, *args):
+        self.rect.x += self.a_x
+        self.counter += 1
+        if self.counter >= self.counter_max:
+            self.kill()
+
+
+
+class Axe:
+    obj_spd = 1
+    obj_live = 2
+    obj_heigth = 40
+    obj_type = Objectile_Axe
+    is_aim = False
+
+
+class Drop(pygame.sprite.Sprite):
+    def __init__(self, pos, group, image):
+        super().__init__(group)
+        self.image = image
+        self.rect = self.image.get_rect()
+
+        self.rect.x = pos[0]
+        self.rect.y = pos[1]
+
+    def set_pos(self, pos):
+        self.rect.x = pos[0]
+        self.rect.y = pos[1]
 
 
 class Level:
@@ -328,10 +471,18 @@ class Level:
         self.enemy_group = pygame.sprite.Group()
         self.objectile_group = pygame.sprite.Group()
         self.door_group = pygame.sprite.Group()
+        self.heath_group = pygame.sprite.Group()
 
-        self.arr_groups = [self.plaer_group, self.vertical_platforms_up,
+        self.arr_unstatick_groups = [self.plaer_group, self.vertical_platforms_up,
         self.vertical_platforms_down, self.horisontal_platform_left,
-        self.horisontal_platform_rigth, self.enemy_group, self.objectile_group, self.mask_platforms, self.door_group]
+        self.horisontal_platform_rigth, self.enemy_group, self.heath_group,
+        self.objectile_group, self.mask_platforms, self.door_group]
+
+        self.gui_group = pygame.sprite.Group()
+        self.plaer_coins = Coin_Shower((10, 10), self.gui_group, plaer)
+        self.plaer_helth = Helth_Shower((10, 50), self.gui_group, plaer)
+
+        self.arr_statick_groups = [self.gui_group]
 
         self.start_pos = (0, 0)
 
@@ -341,12 +492,14 @@ class Level:
                 if 0 <= y < self.map.height and 0 <= x < self.map.width:
                     image = self.map.get_tile_image(x, y, 0)
                     if not(image is None):
-                        if self.map.get_tile_gid(x, y, 0) == TILE_DICT["zlov"]:
+                        if self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["zlov"]:
                             self.enemys.append(Enemy((x * self.width_res, y * self.heigth_res), self.enemy_group))
-                        elif self.map.get_tile_gid(x, y, 0) == TILE_DICT["spawn"]:
+                        elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["spawn"]:
                             self.start_pos = (x * self.width_res, y * self.heigth_res)
-                        elif self.map.get_tile_gid(x, y, 0) == TILE_DICT["door"]:
+                        elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["door"]:
                             self.create_door((x * self.width_res, y * self.heigth_res), image)
+                        elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["heard"]:
+                            Drop((x * self.width_res, y * self.heigth_res), self.heath_group, image)
                         else:
                             self.create_platform(self.width_res, self.heigth_res,
                                                  (x * self.width_res, y * self.heigth_res),
@@ -382,26 +535,36 @@ class Level:
         Mask_Platform(pos, self.door_group, image)
 
     def render(self, screen):
-        if not (isinstance(self.arr_groups, list)):
+        if not (isinstance(self.arr_unstatick_groups, list)):
             raise TypeError("arr_groups must be list")
-        for group in self.arr_groups:
-            if isinstance(group, pygame.sprite.Group):
-                for sprite in group:
+        for usgroup in self.arr_unstatick_groups:
+            if isinstance(usgroup, pygame.sprite.Group):
+                for sprite in usgroup:
                     screen.blit(sprite.image, self.camera.apply(sprite))
             else:
-                print("Erore of layer number", self.arr_groups.index(group))
+                print("Erore of layer number", self.arr_groups.index(usgroup))
+        for sgroup in self.arr_statick_groups:
+            if isinstance(usgroup, pygame.sprite.Group):
+                sgroup.draw(screen)
+            else:
+                print("Erore of layer number", self.arr_groups.index(usgroup))
 
     def update(self):
         self.camera.update(plaer)
-        if not (isinstance(self.arr_groups, list)):
+        if not (isinstance(self.arr_unstatick_groups, list)):
             raise TypeError("arr_groups must be list")
-        for group in self.arr_groups:
+        for group in self.arr_unstatick_groups:
             if isinstance(group, pygame.sprite.Group):
                 for sprite in group:
                     if self.camera.apply(sprite):
                         sprite.update()
             else:
                 print("Erore of layer number", self.arr_groups.index(group))
+        for sgroup in self.arr_statick_groups:
+            if isinstance(sgroup, pygame.sprite.Group):
+                sgroup.update()
+            else:
+                print("Erore of layer number", self.arr_groups.index(sgroup))
 
     def end(self):
         for i in self.enemys:
@@ -464,8 +627,9 @@ class Menu:
 
 def change_level():
     global level, plaer
-    level = Level(f"data\levels\\1.tmx", 60, 60)
+    level = Level(f"data\levels\\{random.randint(1, 4)}.tmx", 60, 60)
     plaer.reload()
+    level.start()
 
 
 def menu():
@@ -518,7 +682,7 @@ def stop_game():
 
 def start_play():
     global level, plaer
-    plaer = Plaer((10, 10), Bow)
+    plaer = Plaer((10, 10), Gun)
     change_level()
     running = True
     level.start()
@@ -534,9 +698,13 @@ def start_play():
                 else:
                     plaer.move(event)
             if event.type == pygame.MOUSEBUTTONDOWN:
-                plaer.summon_objectile(event.pos, level.camera.apply(plaer))
+                if event.button == 1:
+                    plaer.summon_objectile(event.pos, level.camera.apply(plaer))
             if event.type == pygame.MOUSEMOTION:
                 plaer.change_direction(event.pos, level.camera.apply(plaer).x)
+
+        if pygame.sprite.spritecollide(plaer, level.door_group, False):
+            change_level()
         sc.fill("black")
         level.update()
         level.render(sc)
