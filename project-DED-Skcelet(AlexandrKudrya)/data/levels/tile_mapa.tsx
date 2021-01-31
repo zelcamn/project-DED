@@ -20,10 +20,10 @@
   <image width="59" height="61" source="chest.png"/>
  </tile>
  <tile id="8">
-  <image width="60" height="60" source="Безымянный5.png"/>
+  <image width="60" height="60" source="../../../../../project-DED-AlexandrKudrya-patch-1 (2)/project-DED-Skcelet(AlexandrKudrya)/data/levels/Безымянный5.png"/>
  </tile>
  <tile id="9">
-  <image width="60" height="60" source="песок.png"/>
+  <image width="60" height="60" source="../../../../../project-DED-AlexandrKudrya-patch-1 (2)/project-DED-Skcelet(AlexandrKudrya)/data/levels/песок.png"/>
  </tile>
  <tile id="10">
   <image width="60" height="60" source="Безымянный4.png"/>
