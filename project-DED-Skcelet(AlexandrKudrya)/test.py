@@ -1,20 +1,23 @@
+
+import math
 import os
+import random
 import sys
 
 import pygame
 import pytmx
 
-music = 'data/music.mp3'
-width, height = 600, 600
-TILE_DICT = {"platform": 1,
-             "zlov": 2,
-             "spawn": 3,
-             "door": 4}
-
 pygame.init()
 pygame.mixer.init()
-pygame.mixer.music.load(music)
+width, height = 600, 600
 sc = pygame.display.set_mode((width, height))
+
+TILE_DICT = {"platform": 3,
+             "zlov": 4,
+             "spawn": 5,
+             "door": 6,
+             "heard": 7,
+             "chest": 8}
 
 
 def load_image(name, colorkey=None):
@@ -34,6 +37,17 @@ def load_image(name, colorkey=None):
     return image
 
 
+class Music:
+    pygame.mixer.music.load('data/gamemus1.mp3')  # загружем музыку, по другому я не мгогу её остановить
+    gamemusic = pygame.mixer.music
+    pygame.mixer.music.set_volume(0.5)
+    shoot = pygame.mixer.Sound('data/shot.wav')  # звуки можно не загружать
+    povrejen = pygame.mixer.Sound('data/povrejen.mp3')
+    gameover = pygame.mixer.Sound('data/gameover.mp3')
+    zlovded = pygame.mixer.Sound('data/zlovded.mp3')
+    healthup = pygame.mixer.Sound('data/healthup.mp3')
+    meinmusic = pygame.mixer.Sound(f"data/m{random.randint(1, 3)}.mp3")
+
 
 class Platform(pygame.sprite.Sprite):
     def __init__(self, width, heigth, pos, group):
@@ -52,6 +66,46 @@ class Mask_Platform(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = pos[0]
         self.rect.y = pos[1]
+
+
+class Shower(pygame.sprite.Sprite):
+    def __init__(self, pos, group, target):
+        super().__init__(group)
+        self.f1 = pygame.font.Font(None, 36)
+        self.target = target
+        text1 = self.f1.render("", True, (180, 0, 0))
+        self.image = text1
+        self.rect = self.image.get_rect()
+        self.pos = pos
+        self.rect.x = self.pos[0]
+        self.rect.y = self.pos[1]
+
+    def update(self):
+        pass
+
+
+class Coin_Shower(Shower):
+    def __init__(self, pos, group, target):
+        super().__init__(pos, group, target)
+
+    def update(self):
+        text1 = self.f1.render(str(self.target.coins), True, (255, 200, 0))
+        self.image = text1
+        self.rect = self.image.get_rect()
+        self.rect.x = self.pos[0]
+        self.rect.y = self.pos[1]
+
+
+class Helth_Shower(Shower):
+    def __init__(self, pos, group, target):
+        super().__init__(pos, group, target)
+
+    def update(self):
+        text1 = self.f1.render(str(self.target.health), True, (180, 0, 0))
+        self.image = text1
+        self.rect = self.image.get_rect()
+        self.rect.x = self.pos[0]
+        self.rect.y = self.pos[1]
 
 
 class Plaer(pygame.sprite.Sprite):
@@ -76,6 +130,15 @@ class Plaer(pygame.sprite.Sprite):
         self.obj_live = weapon.obj_live
         self.obj_heigth = weapon.obj_heigth
         self.obj_type = weapon.obj_type
+        if weapon.is_aim:
+            self.reaim_function = weapon.reaim
+        else:
+            self.reaim_function = (lambda x, y: x + y)
+
+        self.coins = 0
+        self.health = 3
+        self.invisibility_counter_max = 100
+        self.invisibility_counter = self.invisibility_counter_max
 
     def reload(self):
         level.plaer_group.add(self)
@@ -84,31 +147,46 @@ class Plaer(pygame.sprite.Sprite):
             self.rect.y = 10
 
     def update(self, *args):
+        if pygame.sprite.spritecollide(self, level.enemy_group, False):
+            if self.invisibility_counter >= self.invisibility_counter_max:
+                self.health -= 1
+                self.a_y -= 20
+                Music.povrejen.play()
+                if self.health <= 0:
+                    self.killed = True
+                    self.kill()
+                    Music.gameover.play()
+                else:
+                    self.invisibility_counter = 0
+
+        if pygame.sprite.spritecollide(self, level.heath_group, True):
+            self.health += 1
+            Music.healthup.play()
+
         for i in range(abs(self.a_x)):
             if self.a_x > 0:
-                if not(pygame.sprite.spritecollide(self, level.horisontal_platform_left, False)):
+                if not (pygame.sprite.spritecollide(self, level.horisontal_platform_left, False)):
                     self.rect.x += 1 * (self.a_x / abs(self.a_x))
             if self.a_x < 0:
-                if not(pygame.sprite.spritecollide(self, level.horisontal_platform_rigth, False)):
+                if not (pygame.sprite.spritecollide(self, level.horisontal_platform_rigth, False)):
                     self.rect.x += 1 * (self.a_x / abs(self.a_x))
         if self.a_y > 0:
             self.step = 1
         elif self.a_y < 0:
             self.step = -1
-        for i in range(abs(self.a_y)):
+        for i in range(abs(int(self.a_y // 2))):
             self.rect.y += 1 * self.step
             if pygame.sprite.spritecollide(self, level.vertical_platforms_up, False):
                 break
             if pygame.sprite.spritecollide(self, level.vertical_platforms_down, False):
                 self.a_y = 1
-        if not(pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
-            self.a_y += 1
+        if not (pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
+            self.a_y += 0.5
         else:
             self.a_y = 0
 
-        if pygame.sprite.spritecollide(self, level.enemy_group, False):
-            self.killed = True
-            self.kill()
+        if self.invisibility_counter < self.invisibility_counter_max:
+            self.invisibility_counter += 1
 
     def set_pos(self, pos):
         self.rect.x = pos[0]
@@ -132,25 +210,32 @@ class Plaer(pygame.sprite.Sprite):
             if event.key == pygame.K_d:
                 self.a_x = 0
 
-    def change_direction(self, x, plaer_x_on_screen):
+    def change_direction(self, pos, plaer_x_on_screen):
+        x = pos[0]
         if x < plaer_x_on_screen:
             self.image = Plaer.image_left
             self.obj_spd = -5
         else:
             self.image = Plaer.image_rigth
             self.obj_spd = 5
+        self.reaim(pos)
 
-    def summon_objectile(self):
+    def summon_objectile(self, target_pos, real):
         if self.obj_spd > 0:
             self.obj_type((self.rect.x + 40, self.rect.y + 20 - self.obj_heigth // 2),
                           self.obj_spd,
                           self.obj_live,
-                          self.obj_heigth)
+                          self.obj_heigth,
+                          target_pos, real)
         if self.obj_spd < 0:
             self.obj_type((self.rect.x, self.rect.y + 20 - self.obj_heigth // 2),
                           self.obj_spd,
                           self.obj_live,
-                          self.obj_heigth)
+                          self.obj_heigth,
+                          target_pos, real)
+
+    def reaim(self, target):
+        self.reaim_function((self.rect.x, self.rect.y), target)
 
 
 class Enemy(pygame.sprite.Sprite):
@@ -190,14 +275,16 @@ class Enemy(pygame.sprite.Sprite):
                 break
             if pygame.sprite.spritecollide(self, level.vertical_platforms_down, False):
                 self.a_y = 1
-        if not(pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
+        if not (pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
             self.a_y += 1
         else:
             self.a_y = 0
 
         if pygame.sprite.spritecollide(self, level.objectile_group, True):
+            plaer.coins += 10
             self.killed = True
             self.kill()
+            Music.zlovded.play()
 
     def set_pos(self, pos):
         self.rect.x = pos[0]
@@ -213,12 +300,9 @@ class Enemy(pygame.sprite.Sprite):
             self.image = self.image_left
 
 
-class Objectile_Sword(pygame.sprite.Sprite):
-    def __init__(self, pos, a_x, time_of_live, heigth):
+class Objectile(pygame.sprite.Sprite):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
         super().__init__(level.objectile_group)
-        self.image = pygame.Surface((10, heigth))
-        self.rect = self.image.get_rect()
-        self.image.fill("white")
 
         self.rect.x = pos[0]
         self.rect.y = pos[1]
@@ -228,14 +312,27 @@ class Objectile_Sword(pygame.sprite.Sprite):
         self.counter_max = time_of_live
 
     def update(self, *args):
-        self.rect.x += self.a_x
-        self.counter += 1
-        if self.counter >= self.counter_max:
-            self.kill()
+        pass
 
     def set_pos(self, pos):
         self.rect.x = pos[0]
         self.rect.y = pos[1]
+
+
+class Objectile_Sword(Objectile):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+        self.image = pygame.Surface((10, heigth))
+        self.rect = self.image.get_rect()
+        self.image.fill("white")
+        self.heigth = heigth
+
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+
+    def update(self, *args):
+        self.rect.x += self.a_x
+        self.counter += 1
+        if self.counter >= self.counter_max:
+            self.kill()
 
 
 class Sword:
@@ -243,6 +340,122 @@ class Sword:
     obj_live = 10
     obj_heigth = 40
     obj_type = Objectile_Sword
+    is_aim = False
+
+
+class Objectile_Bow(Objectile):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+        self.image = pygame.Surface((10, 10))
+        self.rect = self.image.get_rect()
+        self.image.fill("white")
+
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+
+        dx = abs(real.x - target_pos[0])
+        dy = abs(real.y - target_pos[1])
+        self.a_y = 1
+
+        if dx == 0:
+            self.a_x = 0
+            self.y_a = a_x
+        else:
+            angle = math.atan(dy / dx)
+            self.a_x = a_x * math.cos(angle)
+            if real.y < target_pos[1]:
+                self.a_y = abs(a_x * math.sin(angle))
+            else:
+                self.a_y = -abs(a_x * math.sin(angle))
+
+    def update(self, *args):
+        self.rect.x += self.a_x
+        self.rect.y += self.a_y // 1
+        self.a_y += 0.1
+        self.counter += 1
+        if pygame.sprite.spritecollide(self, level.mask_platforms, False):
+            self.kill()
+
+
+class Bow:
+    obj_spd = 5
+    obj_live = 10
+    obj_heigth = 40
+    obj_type = Objectile_Bow
+    is_aim = False
+
+
+class Objectile_Gun(Objectile):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+        self.image = pygame.Surface((10, 10))
+        self.rect = self.image.get_rect()
+        self.image.fill("white")
+
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+
+        dx = abs(real.x - target_pos[0])
+        dy = abs(real.y - target_pos[1])
+        self.a_y = 1
+
+        if dx == 0:
+            self.a_x = 0
+            self.y_a = a_x
+        else:
+            angle = math.atan(dy / dx)
+            self.a_x = a_x * math.cos(angle)
+            if real.y < target_pos[1]:
+                self.a_y = abs(a_x * math.sin(angle))
+            else:
+                self.a_y = -abs(a_x * math.sin(angle))
+
+    def update(self, *args):
+        self.rect.x += self.a_x
+        self.rect.y += self.a_y // 1
+        self.counter += 1
+        if pygame.sprite.spritecollide(self, level.mask_platforms, False):
+            self.kill()
+
+
+class Gun:
+    obj_spd = 5
+    obj_live = 10
+    obj_heigth = 10
+    obj_type = Objectile_Gun
+    is_aim = False
+
+
+class Objectile_Axe(Objectile):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+        self.image = pygame.Surface((100, 100))
+        self.rect = self.image.get_rect()
+        self.image.fill("white")
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+
+    def update(self, *args):
+        self.rect.x += self.a_x
+        self.counter += 1
+        if self.counter >= self.counter_max:
+            self.kill()
+
+
+class Axe:
+    obj_spd = 1
+    obj_live = 2
+    obj_heigth = 40
+    obj_type = Objectile_Axe
+    is_aim = False
+
+
+class Drop(pygame.sprite.Sprite):
+    def __init__(self, pos, group, image):
+        super().__init__(group)
+        self.image = image
+        self.rect = self.image.get_rect()
+
+        self.rect.x = pos[0]
+        self.rect.y = pos[1]
+
+    def set_pos(self, pos):
+        self.rect.x = pos[0]
+        self.rect.y = pos[1]
 
 
 class Level:
@@ -258,6 +471,7 @@ class Level:
         self.heigth_res = hrez
 
         self.plaer_group = pygame.sprite.Group()
+        self.aim_group = pygame.sprite.Group()
         self.vertical_platforms_up = pygame.sprite.Group()
         self.vertical_platforms_down = pygame.sprite.Group()
         self.horisontal_platform_left = pygame.sprite.Group()
@@ -266,10 +480,18 @@ class Level:
         self.enemy_group = pygame.sprite.Group()
         self.objectile_group = pygame.sprite.Group()
         self.door_group = pygame.sprite.Group()
+        self.heath_group = pygame.sprite.Group()
 
-        self.arr_groups = [self.plaer_group, self.vertical_platforms_up,
-        self.vertical_platforms_down, self.horisontal_platform_left,
-        self.horisontal_platform_rigth, self.enemy_group, self.objectile_group, self.mask_platforms, self.door_group]
+        self.arr_unstatick_groups = [self.plaer_group, self.vertical_platforms_up,
+                                     self.vertical_platforms_down, self.horisontal_platform_left,
+                                     self.horisontal_platform_rigth, self.enemy_group, self.heath_group,
+                                     self.objectile_group, self.mask_platforms, self.door_group]
+
+        self.gui_group = pygame.sprite.Group()
+        self.plaer_coins = Coin_Shower((10, 10), self.gui_group, plaer)
+        self.plaer_helth = Helth_Shower((10, 50), self.gui_group, plaer)
+
+        self.arr_statick_groups = [self.gui_group]
 
         self.start_pos = (0, 0)
 
@@ -278,17 +500,19 @@ class Level:
             for x in range(-1, self.map.width + 1):
                 if 0 <= y < self.map.height and 0 <= x < self.map.width:
                     image = self.map.get_tile_image(x, y, 0)
-                    if not(image is None):
-                        if self.map.get_tile_gid(x, y, 0) == TILE_DICT["zlov"]:
+                    if not (image is None):
+                        if self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["zlov"]:
                             self.enemys.append(Enemy((x * self.width_res, y * self.heigth_res), self.enemy_group))
-                        elif self.map.get_tile_gid(x, y, 0) == TILE_DICT["spawn"]:
+                        elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["spawn"]:
                             self.start_pos = (x * self.width_res, y * self.heigth_res)
-                        elif self.map.get_tile_gid(x, y, 0) == TILE_DICT["door"]:
+                        elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["door"]:
                             self.create_door((x * self.width_res, y * self.heigth_res), image)
+                        elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["heard"]:
+                            Drop((x * self.width_res, y * self.heigth_res), self.heath_group, image)
                         else:
                             self.create_platform(self.width_res, self.heigth_res,
                                                  (x * self.width_res, y * self.heigth_res),
-                                                                           image)
+                                                 image)
                 else:
                     self.create_platform(self.width_res, self.heigth_res,
                                          (x * self.width_res, y * self.heigth_res),
@@ -320,30 +544,40 @@ class Level:
         Mask_Platform(pos, self.door_group, image)
 
     def render(self, screen):
-        if not (isinstance(self.arr_groups, list)):
+        if not (isinstance(self.arr_unstatick_groups, list)):
             raise TypeError("arr_groups must be list")
-        for group in self.arr_groups:
-            if isinstance(group, pygame.sprite.Group):
-                for sprite in group:
+        for usgroup in self.arr_unstatick_groups:
+            if isinstance(usgroup, pygame.sprite.Group):
+                for sprite in usgroup:
                     screen.blit(sprite.image, self.camera.apply(sprite))
             else:
-                print("Erore of layer number", self.arr_groups.index(group))
+                print("Erore of layer number", self.arr_groups.index(usgroup))
+        for sgroup in self.arr_statick_groups:
+            if isinstance(usgroup, pygame.sprite.Group):
+                sgroup.draw(screen)
+            else:
+                print("Erore of layer number", self.arr_groups.index(usgroup))
 
     def update(self):
         self.camera.update(plaer)
-        if not (isinstance(self.arr_groups, list)):
+        if not (isinstance(self.arr_unstatick_groups, list)):
             raise TypeError("arr_groups must be list")
-        for group in self.arr_groups:
+        for group in self.arr_unstatick_groups:
             if isinstance(group, pygame.sprite.Group):
                 for sprite in group:
                     if self.camera.apply(sprite):
                         sprite.update()
             else:
                 print("Erore of layer number", self.arr_groups.index(group))
+        for sgroup in self.arr_statick_groups:
+            if isinstance(sgroup, pygame.sprite.Group):
+                sgroup.update()
+            else:
+                print("Erore of layer number", self.arr_groups.index(sgroup))
 
     def end(self):
         for i in self.enemys:
-            if not(i.killed):
+            if not (i.killed):
                 return False
         return True
 
@@ -402,15 +636,18 @@ class Menu:
 
 def change_level():
     global level, plaer
-    level = Level(f"data\levels\\1.tmx", 60, 60)
+    level = Level(f"data\levels\\{random.randint(1, 8)}.tmx", 60, 60)
     plaer.reload()
+    level.start()
 
 
 def menu():
     surf = pygame.sprite.Sprite()
     surf.image = pygame.Surface((width, height))
     surf.image.fill("cyan")
+    Music.meinmusic.play()
     surf.rect = surf.image.get_rect()
+    Menu(surf, [[load_image("play.png"), 150, 10, start_play]])
     menu = Menu(surf, [[load_image("play.png"), 150, 10, start_play]])
     running_game = True
     while running_game:
@@ -426,7 +663,8 @@ def menu():
 def pause():
     global plaer, running_pause
     running_pause = True
-    pygame.mixer.music.pause()
+    Music.gamemusic.pause()
+
     surf = pygame.sprite.Sprite()
     surf.image = pygame.Surface((width, height))
     surf.image.fill("red")
@@ -445,22 +683,21 @@ def pause():
 
 def unpause():
     global running_pause
-    pygame.mixer.music.unpause()
     running_pause = False
+    Music.gamemusic.unpause()
 
 
 def stop_game():
     global plaer, running_pause
     plaer.killed = True
-    pygame.mixer.music.stop()
     unpause()
 
 
 def start_play():
-    pygame.mixer.music.play(-1)
-    pygame.mixer.music.set_volume(0.4)
+    Music.meinmusic.stop()
+    Music.gamemusic.play(-1)
     global level, plaer
-    plaer = Plaer((10, 10), Sword)
+    plaer = Plaer((10, 10), Gun)
     change_level()
     running = True
     level.start()
@@ -470,17 +707,22 @@ def start_play():
         for event in pygame.event.get():
             if event.type == pygame.QUIT or plaer.killed:
                 running = False
-                pygame.mixer.music.stop()
+                Music.gamemusic.stop()
+                Music.meinmusic.play()
             if event.type == pygame.KEYUP or event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     pause()
                 else:
                     plaer.move(event)
             if event.type == pygame.MOUSEBUTTONDOWN:
-                plaer.summon_objectile()
+                if event.button == 1:
+                    plaer.summon_objectile(event.pos, level.camera.apply(plaer))
+                    Music.shoot.play()
             if event.type == pygame.MOUSEMOTION:
-                print(level.camera.apply(plaer))
-                plaer.change_direction(event.pos[0], level.camera.apply(plaer).x)
+                plaer.change_direction(event.pos, level.camera.apply(plaer).x)
+
+        if pygame.sprite.spritecollide(plaer, level.door_group, False):
+            change_level()
         sc.fill("black")
         level.update()
         level.render(sc)
