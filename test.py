@@ -6,17 +6,19 @@ import sys
 import pygame
 import pytmx
 
+import json
 
+pygame.init()
+pygame.mixer.init()
 width, height = 600, 600
+sc = pygame.display.set_mode((width, height))
+
 TILE_DICT = {"platform": 3,
              "zlov": 4,
              "spawn": 5,
              "door": 6,
              "heard": 7,
              "chest": 8}
-
-pygame.init()
-sc = pygame.display.set_mode((width, height))
 
 
 def load_image(name, colorkey=None):
@@ -35,7 +37,18 @@ def load_image(name, colorkey=None):
         image = image.convert_alpha()
     return image
 
-ARTEFACTS = [[load_image("Artefact\gold_heard.png"), {"health_max": "100"}]]
+
+class Music:
+    pygame.mixer.music.load('data/gamemus1.mp3')  # загружем музыку, по другому я не мгогу её остановить
+    gamemusic = pygame.mixer.music
+    pygame.mixer.music.set_volume(0.5)
+    shoot = pygame.mixer.Sound('data/shot.wav')  # звуки можно не загружать
+    povrejen = pygame.mixer.Sound('data/povrejen.mp3')
+    gameover = pygame.mixer.Sound('data/gameover.mp3')
+    zlovded = pygame.mixer.Sound('data/zlovded.mp3')
+    healthup = pygame.mixer.Sound('data/healthup.mp3')
+    meinmusic = pygame.mixer.Sound(f"data/m{random.randint(1, 3)}.mp3")
+
 
 class Platform(pygame.sprite.Sprite):
     def __init__(self, width, heigth, pos, group):
@@ -56,7 +69,7 @@ class Mask_Platform(pygame.sprite.Sprite):
         self.rect.y = pos[1]
 
 
-class Digit_Shower(pygame.sprite.Sprite):
+class Shower(pygame.sprite.Sprite):
     def __init__(self, pos, group, target):
         super().__init__(group)
         self.f1 = pygame.font.Font(None, 36)
@@ -72,7 +85,7 @@ class Digit_Shower(pygame.sprite.Sprite):
         pass
 
 
-class Coin_Shower(Digit_Shower):
+class Coin_Shower(Shower):
     def __init__(self, pos, group, target):
         super().__init__(pos, group, target)
 
@@ -109,14 +122,13 @@ class Helth_Shower(pygame.sprite.Sprite):
         self.rect.y = self.pos[1]
 
 
-
 class Plaer(pygame.sprite.Sprite):
-    image_rigth = load_image("hero_right.jpg", colorkey="black")
-    image_left = load_image("hero_left.jpg", colorkey="black")
-
-    def __init__(self, pos, weapon):
+    def __init__(self, pos, weapon, image_rigth, image_left):
         super().__init__()
-        self.image = Plaer.image_rigth
+
+        self.image_rigth = image_rigth
+        self.image_left = image_left
+        self.image = self.image_rigth
         self.rect = self.image.get_rect()
 
         self.rect.x = pos[0]
@@ -132,30 +144,41 @@ class Plaer(pygame.sprite.Sprite):
         self.obj_live = weapon.obj_live
         self.obj_heigth = weapon.obj_heigth
         self.obj_type = weapon.obj_type
-        self.invisibility_counter_max = 100
-        self.invisibility_counter = self.invisibility_counter_max
+        self.a_obj_spd = self.obj_spd
+        self.damage = weapon.damage
 
-        # Расходники
         self.coins = 0
         self.health = 3
         self.health_max = 3
+        self.invisibility_counter_max = 100
+        self.invisibility_counter = self.invisibility_counter_max
+
+        self.damage_counter = 0
+        self.killed_counter = 0
 
     def reload(self):
         level.plaer_group.add(self)
+        if pygame.sprite.spritecollide(self, level.mask_platforms, False):
+            self.rect.x = 10
+            self.rect.y = 10
 
     def update(self, *args):
         if pygame.sprite.spritecollide(self, level.enemy_group, False):
             if self.invisibility_counter >= self.invisibility_counter_max:
+                self.damage_counter += 1
                 self.health -= 1
                 self.a_y -= 20
+                Music.povrejen.play()
                 if self.health <= 0:
                     self.killed = True
                     self.kill()
+                    Music.gameover.play()
                 else:
                     self.invisibility_counter = 0
 
         if pygame.sprite.spritecollide(self, level.heath_group, True) and self.health < self.health_max:
             self.health += 1
+            Music.healthup.play()
 
         for chest in pygame.sprite.spritecollide(self, level.chest_group, False):
             chest.summon_artefact()
@@ -172,14 +195,15 @@ class Plaer(pygame.sprite.Sprite):
             self.coins += eval(artefact.arrey_of_changes.get("coins", "0"))
             self.health += eval(artefact.arrey_of_changes.get("health", "0"))
             self.health_max += eval(artefact.arrey_of_changes.get("health_max", "0"))
+            self.damage += eval(artefact.arrey_of_changes.get("damage", "0"))
             artefact.kill()
 
         for i in range(abs(self.a_x)):
             if self.a_x > 0:
-                if not(pygame.sprite.spritecollide(self, level.horisontal_platform_left, False)):
+                if not (pygame.sprite.spritecollide(self, level.horisontal_platform_left, False)):
                     self.rect.x += 1 * (self.a_x / abs(self.a_x))
             if self.a_x < 0:
-                if not(pygame.sprite.spritecollide(self, level.horisontal_platform_rigth, False)):
+                if not (pygame.sprite.spritecollide(self, level.horisontal_platform_rigth, False)):
                     self.rect.x += 1 * (self.a_x / abs(self.a_x))
         if self.a_y > 0:
             self.step = 1
@@ -191,7 +215,7 @@ class Plaer(pygame.sprite.Sprite):
                 break
             if pygame.sprite.spritecollide(self, level.vertical_platforms_down, False):
                 self.a_y = 1
-        if not(pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
+        if not (pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
             self.a_y += 0.5
         else:
             self.a_y = 0
@@ -224,32 +248,32 @@ class Plaer(pygame.sprite.Sprite):
     def change_direction(self, pos, plaer_x_on_screen):
         x = pos[0]
         if x < plaer_x_on_screen:
-            self.image = Plaer.image_left
-            self.obj_spd = -5
+            self.image = self.image_left
+            self.a_obj_spd = -self.obj_spd
         else:
-            self.image = Plaer.image_rigth
-            self.obj_spd = 5
+            self.image = self.image_rigth
+            self.a_obj_spd = self.obj_spd
 
     def summon_objectile(self, target_pos, real):
-        if self.obj_spd > 0:
+        if self.a_obj_spd > 0:
             self.obj_type((self.rect.x + 40, self.rect.y + 20 - self.obj_heigth // 2),
-                          self.obj_spd,
+                          self.a_obj_spd,
                           self.obj_live,
                           self.obj_heigth,
-                          target_pos, real)
-        if self.obj_spd < 0:
+                          target_pos, real, self.damage)
+        if self.a_obj_spd < 0:
             self.obj_type((self.rect.x, self.rect.y + 20 - self.obj_heigth // 2),
-                          self.obj_spd,
+                          self.a_obj_spd,
                           self.obj_live,
                           self.obj_heigth,
-                          target_pos, real)
+                          target_pos, real, self.damage)
 
 
 class Enemy(pygame.sprite.Sprite):
     image_right = load_image("zlov_right.png", colorkey="black")
     image_left = load_image("zlov_left.png", colorkey="black")
 
-    def __init__(self, pos, group):
+    def __init__(self, pos, group, health):
         super().__init__(group)
         self.image = Enemy.image_left
         self.rect = self.image.get_rect()
@@ -262,6 +286,8 @@ class Enemy(pygame.sprite.Sprite):
         self.step = 1
         self.speed_x = 1
         self.killed = False
+
+        self.health = health + 1
 
     def update(self, *args):
         self.move()
@@ -282,15 +308,19 @@ class Enemy(pygame.sprite.Sprite):
                 break
             if pygame.sprite.spritecollide(self, level.vertical_platforms_down, False):
                 self.a_y = 1
-        if not(pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
+        if not (pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
             self.a_y += 1
         else:
             self.a_y = 0
 
-        if pygame.sprite.spritecollide(self, level.objectile_group, True):
+        for i in pygame.sprite.spritecollide(self, level.objectile_group, True):
+            self.health -= i.damage
+        if self.health <= 0:
             plaer.coins += 10
+            plaer.killed_counter += 1
             self.killed = True
             self.kill()
+            Music.zlovded.play()
 
     def set_pos(self, pos):
         self.rect.x = pos[0]
@@ -307,15 +337,16 @@ class Enemy(pygame.sprite.Sprite):
 
 
 class Objectile(pygame.sprite.Sprite):
-    def __init__(self, pos, speed, time_of_live, heigth, target_pos, real):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real, damage):
         super().__init__(level.objectile_group)
 
         self.rect.x = pos[0]
         self.rect.y = pos[1]
 
-        self.speed = speed
+        self.a_x = a_x
         self.counter = 0
         self.counter_max = time_of_live
+        self.damage = damage
 
     def update(self, *args):
         pass
@@ -326,20 +357,19 @@ class Objectile(pygame.sprite.Sprite):
 
 
 class Objectile_Sword(Objectile):
-    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real, damage):
         self.image = pygame.Surface((10, heigth))
         self.rect = self.image.get_rect()
         self.image.fill("white")
         self.heigth = heigth
 
-        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real, damage)
 
     def update(self, *args):
-        self.rect.x += self.speed
+        self.rect.x += self.a_x
         self.counter += 1
         if self.counter >= self.counter_max:
             self.kill()
-
 
 
 class Sword:
@@ -347,31 +377,34 @@ class Sword:
     obj_live = 10
     obj_heigth = 40
     obj_type = Objectile_Sword
+    damage = 3
 
 
 class Objectile_Bow(Objectile):
-    def __init__(self, pos, speed, time_of_live, heigth, target_pos, real):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real, damage):
         self.image = pygame.Surface((heigth, heigth))
         self.rect = self.image.get_rect()
         self.image.fill("white")
 
-        super().__init__(pos, speed, time_of_live, heigth, target_pos, real)
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real, damage)
 
         dx = abs(real.x - target_pos[0])
         dy = abs(real.y - target_pos[1])
+        self.a_y = 1
+
         if dx == 0:
             self.a_x = 0
-            self.a_y = self.speed
+            self.y_a = a_x
         else:
             angle = math.atan(dy / dx)
-            self.a_x = self.speed * math.cos(angle)
+            self.a_x = a_x * math.cos(angle)
             if real.y < target_pos[1]:
-                self.a_y = abs(self.speed * math.sin(angle))
+                self.a_y = abs(a_x * math.sin(angle))
             else:
-                self.a_y = -abs(self.speed * math.sin(angle))
+                self.a_y = -abs(a_x * math.sin(angle))
 
     def update(self, *args):
-        self.rect.x += self.a_x // 1
+        self.rect.x += self.a_x
         self.rect.y += self.a_y // 1
         self.a_y += 0.1
         self.counter += 1
@@ -380,10 +413,11 @@ class Objectile_Bow(Objectile):
 
 
 class Bow:
-    obj_spd = 1
+    obj_spd = 5
     obj_live = 10
-    obj_heigth = 40
+    obj_heigth = 10
     obj_type = Objectile_Bow
+    damage = 2
 
 
 class Objectile_Gun(Objectile):
@@ -400,28 +434,29 @@ class Objectile_Gun(Objectile):
 
         if dx == 0:
             self.a_x = 0
-            self.a_y = self.speed
+            self.y_a = a_x
         else:
             angle = math.atan(dy / dx)
-            self.a_x = self.speed * math.cos(angle)
+            self.a_x = a_x * math.cos(angle)
             if real.y < target_pos[1]:
-                self.a_y = abs(self.speed * math.sin(angle))
+                self.a_y = abs(a_x * math.sin(angle))
             else:
-                self.a_y = -abs(self.speed * math.sin(angle))
+                self.a_y = -abs(a_x * math.sin(angle))
 
     def update(self, *args):
         self.rect.x += self.a_x
         self.rect.y += self.a_y // 1
+        self.counter += 1
         if pygame.sprite.spritecollide(self, level.mask_platforms, False):
             self.kill()
 
 
-
 class Gun:
-    obj_spd = 1
-    obj_live = 0
-    obj_heigth = 100
+    obj_spd = 5
+    obj_live = 10
+    obj_heigth = 10
     obj_type = Objectile_Gun
+    damage = 2
 
 
 class Artefact(pygame.sprite.Sprite):
@@ -459,6 +494,7 @@ class Chest(pygame.sprite.Sprite):
         artefact = ARTEFACTS[random.randrange(0, len(ARTEFACTS))]
         Artefact((self.pos[0], self.pos[1] - 60), self.artefact_group, artefact[0], artefact[1])
 
+
 class Drop(pygame.sprite.Sprite):
     def __init__(self, pos, group, image):
         super().__init__(group)
@@ -479,8 +515,8 @@ class Level:
         self.summon_time = summon_time
         self.end_time = end_time
         self.end_time_run = False
-
-        self.map = pytmx.load_pygame(f"{file}")
+        print(file)
+        self.map = pytmx.load_pygame(file)
 
         self.width_res = wrez
         self.heigth_res = hrez
@@ -500,10 +536,10 @@ class Level:
         self.artefact_group = pygame.sprite.Group()
 
         self.arr_unstatick_groups = [self.plaer_group, self.vertical_platforms_up,
-        self.vertical_platforms_down, self.horisontal_platform_left,
-        self.horisontal_platform_rigth, self.enemy_group, self.heath_group,
-        self.chest_group, self.artefact_group,
-        self.objectile_group, self.mask_platforms, self.door_group]
+                                     self.vertical_platforms_down, self.horisontal_platform_left,
+                                     self.horisontal_platform_rigth, self.enemy_group, self.heath_group,
+                                     self.chest_group, self.artefact_group,
+                                     self.objectile_group, self.mask_platforms, self.door_group]
 
         self.gui_group = pygame.sprite.Group()
         self.plaer_coins = Coin_Shower((10, 10), self.gui_group, plaer)
@@ -518,9 +554,9 @@ class Level:
             for x in range(-1, self.map.width + 1):
                 if 0 <= y < self.map.height and 0 <= x < self.map.width:
                     image = self.map.get_tile_image(x, y, 0)
-                    if not(image is None):
+                    if not (image is None):
                         if self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["zlov"]:
-                            self.enemys.append(Enemy((x * self.width_res, y * self.heigth_res), self.enemy_group))
+                            self.enemys.append(Enemy((x * self.width_res, y * self.heigth_res), self.enemy_group, LEVEL_COUNTER))
                         elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["spawn"]:
                             self.start_pos = (x * self.width_res, y * self.heigth_res)
                         elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["door"]:
@@ -529,11 +565,11 @@ class Level:
                             Drop((x * self.width_res, y * self.heigth_res), self.heath_group, image)
                         elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["chest"]:
                             Chest((x * self.width_res, y * self.heigth_res), self.chest_group, image,
-                                                                                                    self.artefact_group)
+                                  self.artefact_group)
                         else:
                             self.create_platform(self.width_res, self.heigth_res,
                                                  (x * self.width_res, y * self.heigth_res),
-                                                                           image)
+                                                 image)
                 else:
                     self.create_platform(self.width_res, self.heigth_res,
                                          (x * self.width_res, y * self.heigth_res),
@@ -598,7 +634,7 @@ class Level:
 
     def end(self):
         for i in self.enemys:
-            if not(i.killed):
+            if not (i.killed):
                 return False
         return True
 
@@ -656,18 +692,35 @@ class Menu:
 
 
 def change_level():
-    global level, plaer
-    level = Level(f"data\levels\\{random.randint(4, 4)}.tmx", 60, 60)
+    global level, plaer, LEVEL_COUNTER
+    level = Level(f"data\levels\\{random.randint(1, 8)}.tmx", 60, 60)
     plaer.reload()
+    LEVEL_COUNTER += 1
     level.start()
+
+
+def change_hero_rigth():
+    global choisen_character
+    choisen_character += 1
+    choisen_character = choisen_character % len(CHARACTERS)
+
+
+def change_hero_left():
+    global choisen_character
+    choisen_character -= 1
+    choisen_character = choisen_character % len(CHARACTERS)
 
 
 def menu():
     surf = pygame.sprite.Sprite()
     surf.image = pygame.Surface((width, height))
     surf.image.fill("cyan")
+    Music.meinmusic.play()
     surf.rect = surf.image.get_rect()
-    menu = Menu(surf, [[load_image("play.png"), 150, 10, start_play]])
+    f1 = pygame.font.Font(None, 20)
+    menu = Menu(surf, [[load_image("play.png"), 150, 10, start_play],
+                       [load_image("to_left.png"), 10, 200, change_hero_left],
+                       [load_image("to_rigth.png"), width - 10 - 100, 200, change_hero_rigth]])
     running_game = True
     while running_game:
         for event in pygame.event.get():
@@ -676,12 +729,17 @@ def menu():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 menu.update(event.pos)
         menu.render(sc)
+        sc.blit(pygame.transform.scale(CHARACTERS[choisen_character][2], (100, 100)), (width // 2 - 50, 200))
+        text1 = f1.render(f"Золото: {COINS}", True,
+                          (180, 0, 0))
+        sc.blit(text1, )
         pygame.display.flip()
 
 
 def pause():
     global plaer, running_pause
     running_pause = True
+    Music.gamemusic.pause()
 
     surf = pygame.sprite.Sprite()
     surf.image = pygame.Surface((width, height))
@@ -702,6 +760,7 @@ def pause():
 def unpause():
     global running_pause
     running_pause = False
+    Music.gamemusic.unpause()
 
 
 def stop_game():
@@ -711,17 +770,21 @@ def stop_game():
 
 
 def start_play():
-    global level, plaer
-    plaer = Plaer((10, 10), Gun)
+    Music.meinmusic.stop()
+    Music.gamemusic.play(-1)
+    global level, plaer, choisen_character, LEVEL_COUNTER
+    plaer = Plaer(*CHARACTERS[choisen_character])
     change_level()
     running = True
     level.start()
     print(running)
-
+    LEVEL_COUNTER = 1
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or plaer.killed:
                 running = False
+                Music.gamemusic.stop()
+                Music.meinmusic.play()
             if event.type == pygame.KEYUP or event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     pause()
@@ -730,6 +793,7 @@ def start_play():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     plaer.summon_objectile(event.pos, level.camera.apply(plaer))
+                    Music.shoot.play()
             if event.type == pygame.MOUSEMOTION:
                 plaer.change_direction(event.pos, level.camera.apply(plaer).x)
 
@@ -740,9 +804,78 @@ def start_play():
         level.render(sc)
         pygame.display.flip()
         clock.tick(100)
+    dead_screen()
 
+
+def stop_dead_screen():
+    global dead_screen_run
+    dead_screen_run = False
+
+
+def dead_screen():
+    global dead_screen_run, plaer
+    surf = pygame.sprite.Sprite()
+    surf.image = pygame.Surface((width, height))
+    surf.image.fill("gray")
+    surf.rect = surf.image.get_rect()
+    menu = Menu(surf, [[load_image("next.png"), 10, 450, stop_dead_screen]])
+    dead_screen_run = True
+    counter1 = 0
+    counter2 = 0
+    counter3 = 0
+    counter4 = 0
+    text = [f"Мобов Убито: {plaer.killed_counter}",
+           f"Урона Получено: {plaer.damage_counter}",
+           f"Этажей пройдено: {LEVEL_COUNTER}",
+           f"Золота Получено: {plaer.killed_counter - plaer.damage_counter // LEVEL_COUNTER}"]
+    while dead_screen_run:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                dead_screen_run = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                menu.update(event.pos)
+        if counter1 <= len(text[0]) * 10:
+            counter1 += 1
+        else:
+            if counter2 <= len(text[1])  * 10:
+                counter2 += 1
+            else:
+                if counter3 <= len(text[2])  * 10:
+                    counter3 += 1
+                else:
+                    if counter4 <= len(text[3]) * 10:
+                        counter4 += 1
+        menu.render(sc)
+        f1 = pygame.font.Font(None, 36)
+        text1 = f1.render(text[0][:counter1 // 10], True,
+                          (180, 0, 0))
+        text2 = f1.render(text[1][:counter2 // 10], True,
+                          (180, 0, 0))
+        text3 = f1.render(text[2][:counter3 // 10], True,
+                          (180, 0, 0))
+        text4 = f1.render(text[3][:counter4 // 10], True,
+                          (180, 0, 0))
+        sc.blit(text1, (10, 10))
+        sc.blit(text2, (10, 110))
+        sc.blit(text3, (10, 210))
+        sc.blit(text4, (10, 310))
+        pygame.display.flip()
+
+
+ARTEFACTS = [[load_image("Artefact\gold_heard.png"), {"health_max": "100"}]]
+ALL_CHARACTERS = [[(10, 10), Sword, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
+              [(10, 10), Bow, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
+              [(10, 10), Gun, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")]]
+LEVEL_COUNTER = 0
+COINS = 0
+choisen_character = 0
+with open('data\\configs\\resurses.json') as cat_file:
+    data = json.load(cat_file)
+COINS = data["coins"] % 271 ** 3
+CHARACTERS = [ALL_CHARACTERS[i] for i in data["characters"]]
 
 clock = pygame.time.Clock()
 running_pause = False
+dead_screen_run = False
 print(pygame.font.get_default_font())
 menu()
