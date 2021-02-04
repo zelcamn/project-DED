@@ -51,9 +51,9 @@ class Music:
 
 
 class Platform(pygame.sprite.Sprite):
-    def __init__(self, width, heigth, pos, group):
+    def __init__(self, width_of_platform, heigth, pos, group):
         super().__init__(group)
-        self.image = pygame.Surface((width, heigth))
+        self.image = pygame.Surface((width_of_platform, heigth))
         self.rect = self.image.get_rect()
         self.image.fill("gray")
         self.rect.x = pos[0]
@@ -72,7 +72,7 @@ class Mask_Platform(pygame.sprite.Sprite):
 class Shower(pygame.sprite.Sprite):
     def __init__(self, pos, group, target):
         super().__init__(group)
-        self.f1 = pygame.font.Font(None, 36)
+        self.f1 = pygame.font.Font(None, SHOWER_SIZE)
         self.target = target
         text1 = self.f1.render("", True, (180, 0, 0))
         self.image = text1
@@ -90,7 +90,7 @@ class Coin_Shower(Shower):
         super().__init__(pos, group, target)
 
     def update(self):
-        text1 = self.f1.render(str(self.target.coins), True, (255, 200, 0))
+        text1 = self.f1.render(str(self.target.coins), True, COINS_SHOWER_COLOR)
         self.image = text1
         self.rect = self.image.get_rect()
         self.rect.x = self.pos[0]
@@ -102,20 +102,20 @@ class Helth_Shower(pygame.sprite.Sprite):
         self.target = target
         self.pos = pos
         super().__init__(group)
-        self.image = pygame.Surface((self.target.health_max * 20, 20))
+        self.image = pygame.Surface((self.target.health_max * HEALTH_SHOWER_SIZE, HEALTH_SHOWER_SIZE))
         self.image.fill("gray")
-        for i in range(20):
-            for j in range(20 * self.target.health):
+        for i in range(HEALTH_SHOWER_SIZE):
+            for j in range(HEALTH_SHOWER_SIZE * self.target.health):
                 self.image.set_at((j, i), "red")
         self.rect = self.image.get_rect()
         self.rect.x = self.pos[0]
         self.rect.y = self.pos[1]
 
     def update(self):
-        self.image = pygame.Surface((self.target.health_max * 20, 20))
+        self.image = pygame.Surface((self.target.health_max * HEALTH_SHOWER_SIZE, HEALTH_SHOWER_SIZE))
         self.image.fill("gray")
-        for i in range(20):
-            for j in range(20 * self.target.health):
+        for i in range(HEALTH_SHOWER_SIZE):
+            for j in range(HEALTH_SHOWER_SIZE * self.target.health):
                 self.image.set_at((j, i), "red")
         self.rect = self.image.get_rect()
         self.rect.x = self.pos[0]
@@ -148,9 +148,9 @@ class Plaer(pygame.sprite.Sprite):
         self.damage = weapon.damage
 
         self.coins = 0
-        self.health = 3
-        self.health_max = 3
-        self.invisibility_counter_max = 100
+        self.health = START_HEALTH
+        self.health_max = START_HEALTH_MAX
+        self.invisibility_counter_max = START_INVISIBILITY_MAX
         self.invisibility_counter = self.invisibility_counter_max
 
         self.damage_counter = 0
@@ -163,7 +163,7 @@ class Plaer(pygame.sprite.Sprite):
             self.rect.y = 10
 
     def update(self, *args):
-        if pygame.sprite.spritecollide(self, level.enemy_group, False):
+        for i in pygame.sprite.spritecollide(self, level.enemy_group, False):
             if self.invisibility_counter >= self.invisibility_counter_max:
                 self.damage_counter += 1
                 self.health -= 1
@@ -177,7 +177,7 @@ class Plaer(pygame.sprite.Sprite):
                     self.invisibility_counter = 0
 
         if pygame.sprite.spritecollide(self, level.heath_group, True) and self.health < self.health_max:
-            self.health += 1
+            self.health += START_HEALTH
             Music.healthup.play()
 
         for chest in pygame.sprite.spritecollide(self, level.chest_group, False):
@@ -216,7 +216,7 @@ class Plaer(pygame.sprite.Sprite):
             if pygame.sprite.spritecollide(self, level.vertical_platforms_down, False):
                 self.a_y = 1
         if not (pygame.sprite.spritecollide(self, level.vertical_platforms_up, False)):
-            self.a_y += 0.5
+            self.a_y += GRAVITY
         else:
             self.a_y = 0
 
@@ -238,7 +238,7 @@ class Plaer(pygame.sprite.Sprite):
                 self.a_x = self.speed_x
             if event.key == pygame.K_SPACE:
                 if pygame.sprite.spritecollide(self, level.vertical_platforms_up, False):
-                    self.a_y += -20
+                    self.a_y -= JUMP_POWER
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_a:
                 self.a_x = 0
@@ -256,13 +256,13 @@ class Plaer(pygame.sprite.Sprite):
 
     def summon_objectile(self, target_pos, real):
         if self.a_obj_spd > 0:
-            self.obj_type((self.rect.x + 40, self.rect.y + 20 - self.obj_heigth // 2),
+            self.obj_type((self.rect.x + self.rect.width, self.rect.y + self.rect.height // 2 - self.obj_heigth // 2),
                           self.a_obj_spd,
                           self.obj_live,
                           self.obj_heigth,
                           target_pos, real, self.damage)
         if self.a_obj_spd < 0:
-            self.obj_type((self.rect.x, self.rect.y + 20 - self.obj_heigth // 2),
+            self.obj_type((self.rect.x, self.rect.y + self.rect.height // 2 - self.obj_heigth // 2),
                           self.a_obj_spd,
                           self.obj_live,
                           self.obj_heigth,
@@ -270,12 +270,11 @@ class Plaer(pygame.sprite.Sprite):
 
 
 class Enemy(pygame.sprite.Sprite):
-    image_right = load_image("zlov_right.png", colorkey="black")
-    image_left = load_image("zlov_left.png", colorkey="black")
 
     def __init__(self, pos, group, health):
+        self.load_animations()
         super().__init__(group)
-        self.image = Enemy.image_left
+        self.image = self.animations["RUN"][0]
         self.rect = self.image.get_rect()
 
         self.rect.x = pos[0]
@@ -288,9 +287,15 @@ class Enemy(pygame.sprite.Sprite):
         self.killed = False
 
         self.health = health + 1
+        self.image_stack = []
+        self.image_counter = 0
+
+        self.tick_counter = 0
+        self.tick_counter_max = 5
 
     def update(self, *args):
         self.move()
+
         for i in range(abs(self.a_x)):
             if self.a_x > 0:
                 if not (pygame.sprite.spritecollide(self, level.horisontal_platform_left, False)):
@@ -316,11 +321,32 @@ class Enemy(pygame.sprite.Sprite):
         for i in pygame.sprite.spritecollide(self, level.objectile_group, True):
             self.health -= i.damage
         if self.health <= 0:
-            plaer.coins += 10
+            plaer.coins += COINS_4_ENEMY
             plaer.killed_counter += 1
             self.killed = True
             self.kill()
             Music.zlovded.play()
+
+        if (abs(self.rect.x - plaer.rect.x) < STEP // 10 \
+            or abs(self.rect.x - plaer.rect.x - plaer.rect.width) < STEP // 10) \
+                and \
+                (abs(self.rect.y - plaer.rect.y) < STEP // 10 \
+                 or abs(self.rect.y - plaer.rect.y - plaer.rect.height) < STEP // 10):
+            self.attact()
+
+        if self.tick_counter > self.tick_counter_max:
+            if abs(self.a_x) > 0:
+                self.image_stack.append(self.animations["RUN"][self.image_counter % len(self.animations["RUN"])])
+                self.image_counter += 1
+            try:
+                self.image = self.image_stack.pop(0)
+            except IndexError:
+                pass
+            if self.a_x < 0:
+                self.image = pygame.transform.flip(self.image, True, False)
+            self.tick_counter = 0
+        else:
+            self.tick_counter += 1
 
     def set_pos(self, pos):
         self.rect.x = pos[0]
@@ -330,10 +356,20 @@ class Enemy(pygame.sprite.Sprite):
         possitinal_pos = plaer.get_pos()[0]
         if possitinal_pos > self.rect.x:
             self.a_x = self.speed_x
-            self.image = self.image_right
         if possitinal_pos < self.rect.x:
             self.a_x = -self.speed_x
-            self.image = self.image_left
+
+    def load_animations(self):
+        global ENEMY_ANIMATIONS
+        self.animations = {}
+        for i in ENEMY_ANIMATIONS.keys():
+            self.animations[i] = []
+            for j in os.listdir(os.path.join("data", ENEMY_ANIMATIONS[i])):
+                self.animations[i].append(pygame.transform.scale(load_image(f"{ENEMY_ANIMATIONS[i]}\\{j}"), (50, 50)))
+        print(self.animations)
+
+    def attact(self):
+        self.image_stack = self.animations["ATTACK"] + self.image_stack
 
 
 class Objectile(pygame.sprite.Sprite):
@@ -406,7 +442,7 @@ class Objectile_Bow(Objectile):
     def update(self, *args):
         self.rect.x += self.a_x
         self.rect.y += self.a_y // 1
-        self.a_y += 0.1
+        self.a_y += BOW_GRAVITY
         self.counter += 1
         if pygame.sprite.spritecollide(self, level.mask_platforms, False):
             self.kill()
@@ -421,12 +457,12 @@ class Bow:
 
 
 class Objectile_Gun(Objectile):
-    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real):
+    def __init__(self, pos, a_x, time_of_live, heigth, target_pos, real, damage):
         self.image = pygame.Surface((heigth, heigth))
         self.rect = self.image.get_rect()
         self.image.fill("white")
 
-        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real)
+        super().__init__(pos, a_x, time_of_live, heigth, target_pos, real, damage)
 
         dx = abs(real.x - target_pos[0])
         dy = abs(real.y - target_pos[1])
@@ -447,7 +483,7 @@ class Objectile_Gun(Objectile):
         self.rect.x += self.a_x
         self.rect.y += self.a_y // 1
         self.counter += 1
-        if pygame.sprite.spritecollide(self, level.mask_platforms, False):
+        if pygame.sprite.spritecollide(self, level.mask_platforms, False) or self.a_x == self.a_x == 0:
             self.kill()
 
 
@@ -470,7 +506,6 @@ class Artefact(pygame.sprite.Sprite):
 
         self.arrey_of_changes = arrey_of_changes
 
-
     def set_pos(self, pos):
         self.rect.x = pos[0]
         self.rect.y = pos[1]
@@ -492,7 +527,8 @@ class Chest(pygame.sprite.Sprite):
 
     def summon_artefact(self):
         artefact = ARTEFACTS[random.randrange(0, len(ARTEFACTS))]
-        Artefact((self.pos[0], self.pos[1] - 60), self.artefact_group, artefact[0], artefact[1])
+        Artefact((self.pos[0], self.pos[1] - STEP * CHEST_ARTEFACT_DELAY), self.artefact_group, artefact[0],
+                 artefact[1])
 
 
 class Drop(pygame.sprite.Sprite):
@@ -510,10 +546,8 @@ class Drop(pygame.sprite.Sprite):
 
 
 class Level:
-    def __init__(self, file, wrez, hrez, summon_time=500, end_time=500):
+    def __init__(self, file, wrez, hrez):
         self.enemys = []
-        self.summon_time = summon_time
-        self.end_time = end_time
         self.end_time_run = False
         print(file)
         self.map = pytmx.load_pygame(file)
@@ -542,8 +576,8 @@ class Level:
                                      self.objectile_group, self.mask_platforms, self.door_group]
 
         self.gui_group = pygame.sprite.Group()
-        self.plaer_coins = Coin_Shower((10, 10), self.gui_group, plaer)
-        self.plaer_helth = Helth_Shower((10, 50), self.gui_group, plaer)
+        self.plaer_coins = Coin_Shower(COINS_SHOWER_POS, self.gui_group, plaer)
+        self.plaer_helth = Helth_Shower(HEALTH_CHOWER_POS, self.gui_group, plaer)
 
         self.arr_statick_groups = [self.gui_group]
 
@@ -556,7 +590,8 @@ class Level:
                     image = self.map.get_tile_image(x, y, 0)
                     if not (image is None):
                         if self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["zlov"]:
-                            self.enemys.append(Enemy((x * self.width_res, y * self.heigth_res), self.enemy_group, LEVEL_COUNTER))
+                            self.enemys.append(
+                                Enemy((x * self.width_res, y * self.heigth_res), self.enemy_group, LEVEL_COUNTER))
                         elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["spawn"]:
                             self.start_pos = (x * self.width_res, y * self.heigth_res)
                         elif self.map.tiledgidmap[self.map.get_tile_gid(x, y, 0)] == TILE_DICT["door"]:
@@ -717,10 +752,12 @@ def menu():
     surf.image.fill("cyan")
     Music.meinmusic.play()
     surf.rect = surf.image.get_rect()
-    f1 = pygame.font.Font(None, 20)
+    f1 = pygame.font.Font(None, 36)
     menu = Menu(surf, [[load_image("play.png"), 150, 10, start_play],
                        [load_image("to_left.png"), 10, 200, change_hero_left],
-                       [load_image("to_rigth.png"), width - 10 - 100, 200, change_hero_rigth]])
+                       [load_image("to_rigth.png"), width - 10 - 100, 200, change_hero_rigth],
+                       [pygame.transform.scale(load_image("to_rigth.png"), (150, 30)), width // 2 - 75, 400, aboute_razrabotchikav]]
+                )
     running_game = True
     while running_game:
         for event in pygame.event.get():
@@ -732,7 +769,7 @@ def menu():
         sc.blit(pygame.transform.scale(CHARACTERS[choisen_character][2], (100, 100)), (width // 2 - 50, 200))
         text1 = f1.render(f"Золото: {COINS}", True,
                           (180, 0, 0))
-        sc.blit(text1, )
+        sc.blit(text1, (10, 10))
         pygame.display.flip()
 
 
@@ -803,7 +840,7 @@ def start_play():
         level.update()
         level.render(sc)
         pygame.display.flip()
-        clock.tick(100)
+        clock.tick(DBI)
     dead_screen()
 
 
@@ -813,7 +850,7 @@ def stop_dead_screen():
 
 
 def dead_screen():
-    global dead_screen_run, plaer
+    global dead_screen_run, plaer, COINS
     surf = pygame.sprite.Sprite()
     surf.image = pygame.Surface((width, height))
     surf.image.fill("gray")
@@ -825,9 +862,10 @@ def dead_screen():
     counter3 = 0
     counter4 = 0
     text = [f"Мобов Убито: {plaer.killed_counter}",
-           f"Урона Получено: {plaer.damage_counter}",
-           f"Этажей пройдено: {LEVEL_COUNTER}",
-           f"Золота Получено: {plaer.killed_counter - plaer.damage_counter // LEVEL_COUNTER}"]
+            f"Урона Получено: {plaer.damage_counter}",
+            f"Этажей пройдено: {LEVEL_COUNTER}",
+            f"Золота Получено: {plaer.killed_counter - plaer.damage_counter // LEVEL_COUNTER}"]
+    COINS += plaer.killed_counter - plaer.damage_counter // LEVEL_COUNTER
     while dead_screen_run:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -837,10 +875,10 @@ def dead_screen():
         if counter1 <= len(text[0]) * 10:
             counter1 += 1
         else:
-            if counter2 <= len(text[1])  * 10:
+            if counter2 <= len(text[1]) * 10:
                 counter2 += 1
             else:
-                if counter3 <= len(text[2])  * 10:
+                if counter3 <= len(text[2]) * 10:
                     counter3 += 1
                 else:
                     if counter4 <= len(text[3]) * 10:
@@ -862,20 +900,107 @@ def dead_screen():
         pygame.display.flip()
 
 
+def stop_aboute_razrabotchikav():
+    global aboute_razrabotchikav_run
+    aboute_razrabotchikav_run = False
+
+
+def aboute_razrabotchikav():
+    global aboute_razrabotchikav_run, plaer
+    surf = pygame.sprite.Sprite()
+    surf.image = pygame.Surface((width, height))
+    surf.image.fill("cyan")
+    surf.rect = surf.image.get_rect()
+    menu = Menu(surf, [[load_image("next.png"), 10, 450, stop_aboute_razrabotchikav]])
+    aboute_razrabotchikav_run = True
+    counter1 = 0
+    counter2 = 0
+    counter3 = 0
+    counter4 = 0
+    text = [f"Над игрой работали: ",
+            f"Ну тут напишите свои имена",
+            f"И тут",
+            f"Александ Кудря - Разработка движка, и его допиливание"]
+    while aboute_razrabotchikav_run:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                aboute_razrabotchikav_run = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                menu.update(event.pos)
+        if counter1 <= len(text[0]) * 10:
+            counter1 += 1
+        else:
+            if counter2 <= len(text[1]) * 10:
+                counter2 += 1
+            else:
+                if counter3 <= len(text[2]) * 10:
+                    counter3 += 1
+                else:
+                    if counter4 <= len(text[3]) * 10:
+                        counter4 += 1
+        menu.render(sc)
+        f1 = pygame.font.Font(None, 36)
+        text1 = f1.render(text[0][:counter1 // 10], True,
+                          (180, 180, 0))
+        text2 = f1.render(text[1][:counter2 // 10], True,
+                          (180, 180, 0))
+        text3 = f1.render(text[2][:counter3 // 10], True,
+                          (180, 180, 0))
+        text4 = f1.render(text[3][:counter4 // 10], True,
+                          (180, 180, 0))
+        sc.blit(text1, (10, 10))
+        sc.blit(text2, (10, 110))
+        sc.blit(text3, (10, 210))
+        sc.blit(text4, (10, 310))
+        pygame.display.flip()
+
+
 ARTEFACTS = [[load_image("Artefact\gold_heard.png"), {"health_max": "100"}]]
 ALL_CHARACTERS = [[(10, 10), Sword, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
-              [(10, 10), Bow, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
-              [(10, 10), Gun, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")]]
+                  [(10, 10), Bow, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
+                  [(10, 10), Gun, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")]]
+
+ENEMY_ANIMATIONS = {"RUN": "Enemies\\run",
+                    "ATTACK": "Enemies\\attack"}
 LEVEL_COUNTER = 0
 COINS = 0
 choisen_character = 0
 with open('data\\configs\\resurses.json') as cat_file:
     data = json.load(cat_file)
-COINS = data["coins"] % 271 ** 3
+COINS = data["coins"]
 CHARACTERS = [ALL_CHARACTERS[i] for i in data["characters"]]
+
+SHOWER_SIZE = 36
+COINS_SHOWER_COLOR = (255, 200, 0)
+HEALTH_SHOWER_SIZE = 20
+
+START_HEALTH = 3
+START_HEALTH_MAX = 3
+START_INVISIBILITY_MAX = 100
+
+ONE_HEARD_EQUAL = 1
+
+GRAVITY = 0.5
+JUMP_POWER = 20
+
+COINS_4_ENEMY = 10
+
+BOW_GRAVITY = 0.1
+
+STEP = 60
+CHEST_ARTEFACT_DELAY = 2
+
+COINS_SHOWER_POS = (10, 10)
+HEALTH_CHOWER_POS = (10, 50)
+
+DBI = 100
 
 clock = pygame.time.Clock()
 running_pause = False
 dead_screen_run = False
+aboute_razrabotchikav_run = False
 print(pygame.font.get_default_font())
 menu()
+with open('data\\configs\\resurses.json', mode="w") as cat_file:
+    data["coins"] = COINS
+    json.dump(data, cat_file)
