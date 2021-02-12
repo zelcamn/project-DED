@@ -14,11 +14,11 @@ width, height = 600, 600
 sc = pygame.display.set_mode((width, height))
 
 TILE_DICT = {"platform": 3,
-             "zlov": 4,
-             "spawn": 5,
-             "door": 6,
-             "heard": 7,
-             "chest": 8}
+             "zlov": 2,
+             "spawn": 3,
+             "door": 4,
+             "heard": 6,
+             "chest": 5}
 
 
 def load_image(name, colorkey=None):
@@ -726,9 +726,17 @@ class Menu:
                 self.stack[button]()
 
 
+def generate_stack():
+    global level_stack
+    level_stack = [f"data\levels\\{i}.tmx" for i in range(1, 17)]
+    random.shuffle(level_stack)
+
+
 def change_level():
-    global level, plaer, LEVEL_COUNTER
-    level = Level(f"data\levels\\{random.randint(1, 8)}.tmx", 60, 60)
+    global level, plaer, LEVEL_COUNTER, level_stack
+    level = Level(level_stack.pop(0), 60, 60)
+    if len(level_stack) <= 0:
+        generate_stack()
     plaer.reload()
     LEVEL_COUNTER += 1
     level.start()
@@ -955,7 +963,15 @@ def aboute_razrabotchikav():
         pygame.display.flip()
 
 
-ARTEFACTS = [[load_image("Artefact\gold_heard.png"), {"health_max": "100"}]]
+ARTEFACTS = [[load_image("Artefact\gold_heard.png"), {"health_max": "1"}],
+             [load_image("Artefact\\banana_sword.png"), {"damage": "self.damage"}],
+             [load_image("Artefact\\ne_poza_a_sahar.png"), {"speed_x": "3"}],
+             [load_image("Artefact\\maslo.png"), {"obj_spd": "4", "speed_x": "-1"}],
+             [load_image("Artefact\\headset.png"), {"obj_live": "3"}],
+             [load_image("Artefact\\udlenitel_ruki.png"), {"obj_heigth": "30", "damage": "-1"}],
+             [load_image("Artefact\\invizibility_powder.png"), {"invisibility_counter_max": "self.invisibility_counter_max"}],
+             [load_image("Artefact\\coin.png"), {"coins": "1000"}]]
+
 ALL_CHARACTERS = [[(10, 10), Sword, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
                   [(10, 10), Bow, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
                   [(10, 10), Gun, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")]]
@@ -994,6 +1010,9 @@ COINS_SHOWER_POS = (10, 10)
 HEALTH_CHOWER_POS = (10, 50)
 
 DBI = 100
+
+level_stack = []
+generate_stack()
 
 clock = pygame.time.Clock()
 running_pause = False
