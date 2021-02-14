@@ -123,12 +123,11 @@ class Helth_Shower(pygame.sprite.Sprite):
 
 
 class Plaer(pygame.sprite.Sprite):
-    def __init__(self, pos, weapon, image_rigth, image_left):
+    def __init__(self, pos, weapon, animations):
         super().__init__()
-
-        self.image_rigth = image_rigth
-        self.image_left = image_left
-        self.image = self.image_rigth
+        self.animations = animations
+        self.image_stack = [self.animations["static"]]
+        self.image = self.image_stack.pop(0)
         self.rect = self.image.get_rect()
 
         self.rect.x = pos[0]
@@ -156,6 +155,12 @@ class Plaer(pygame.sprite.Sprite):
         self.damage_counter = 0
         self.killed_counter = 0
 
+        self.tick_counter = 0
+        self.tick_counter_max = 5
+
+        self.image_counter = 0
+        self.direction = True
+
     def reload(self):
         level.plaer_group.add(self)
         if pygame.sprite.spritecollide(self, level.mask_platforms, False):
@@ -177,7 +182,7 @@ class Plaer(pygame.sprite.Sprite):
                     self.invisibility_counter = 0
 
         if pygame.sprite.spritecollide(self, level.heath_group, True) and self.health < self.health_max:
-            self.health += START_HEALTH
+            self.health += 1
             Music.healthup.play()
 
         for chest in pygame.sprite.spritecollide(self, level.chest_group, False):
@@ -223,6 +228,22 @@ class Plaer(pygame.sprite.Sprite):
         if self.invisibility_counter < self.invisibility_counter_max:
             self.invisibility_counter += 1
 
+        if self.tick_counter > self.tick_counter_max:
+            if abs(self.a_x) > 0:
+                self.image_stack.append(self.animations["run"][self.image_counter % len(self.animations["run"])])
+                self.image_counter += 1
+            else:
+                self.image_stack.append(self.animations["static"])
+            try:
+                self.image = self.image_stack.pop(0)
+            except IndexError:
+                pass
+            if self.direction:
+                self.image = pygame.transform.flip(self.image, True, False)
+            self.tick_counter = 0
+        else:
+            self.tick_counter += 1
+
     def set_pos(self, pos):
         self.rect.x = pos[0]
         self.rect.y = pos[1]
@@ -248,13 +269,14 @@ class Plaer(pygame.sprite.Sprite):
     def change_direction(self, pos, plaer_x_on_screen):
         x = pos[0]
         if x < plaer_x_on_screen:
-            self.image = self.image_left
-            self.a_obj_spd = -self.obj_spd
+            self.direction = True
+            self.a_obj_spd = -1 * self.obj_spd
         else:
-            self.image = self.image_rigth
+            self.direction = False
             self.a_obj_spd = self.obj_spd
 
     def summon_objectile(self, target_pos, real):
+        self.image_stack = self.animations["attac"].copy()
         if self.a_obj_spd > 0:
             self.obj_type((self.rect.x + self.rect.width, self.rect.y + self.rect.height // 2 - self.obj_heigth // 2),
                           self.a_obj_spd,
@@ -728,7 +750,7 @@ class Menu:
 
 def generate_stack():
     global level_stack
-    level_stack = [f"data\levels\\{i}.tmx" for i in range(1, 17)]
+    level_stack = [f"data\levels\\{i}.tmx" for i in range(1, 16)]
     random.shuffle(level_stack)
 
 
@@ -756,15 +778,15 @@ def change_hero_left():
 
 def menu():
     surf = pygame.sprite.Sprite()
-    surf.image = pygame.Surface((width, height))
-    surf.image.fill("cyan")
+    surf.image = load_image("fone.png")
     Music.meinmusic.play()
     surf.rect = surf.image.get_rect()
     f1 = pygame.font.Font(None, 36)
-    menu = Menu(surf, [[load_image("play.png"), 150, 10, start_play],
-                       [load_image("to_left.png"), 10, 200, change_hero_left],
-                       [load_image("to_rigth.png"), width - 10 - 100, 200, change_hero_rigth],
-                       [pygame.transform.scale(load_image("to_rigth.png"), (150, 30)), width // 2 - 75, 400, aboute_razrabotchikav]]
+    menu = Menu(surf, [[load_image("play.png", colorkey="white"), 150, 50, start_play],
+                       [load_image("to_left.png", colorkey="white"), 50, 200, change_hero_left],
+                       [load_image("to_rigth.png", colorkey="white"), width - 50 - 100, 200, change_hero_rigth],
+                       [load_image("aboute_developers.png", colorkey="white"),
+                                            width // 2 - 75, 400, aboute_razrabotchikav]]
                 )
     running_game = True
     while running_game:
@@ -774,7 +796,7 @@ def menu():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 menu.update(event.pos)
         menu.render(sc)
-        sc.blit(pygame.transform.scale(CHARACTERS[choisen_character][2], (100, 100)), (width // 2 - 50, 200))
+        sc.blit(pygame.transform.scale(CHARACTERS[choisen_character][2]["static"], (100, 100)), (width // 2 - 50, 200))
         text1 = f1.render(f"Золото: {COINS}", True,
                           (180, 0, 0))
         sc.blit(text1, (10, 10))
@@ -787,11 +809,10 @@ def pause():
     Music.gamemusic.pause()
 
     surf = pygame.sprite.Sprite()
-    surf.image = pygame.Surface((width, height))
-    surf.image.fill("red")
+    surf.image = load_image("fone.png")
     surf.rect = surf.image.get_rect()
-    menu = Menu(surf, [[load_image("pause.png"), 150, 10, unpause],
-                       [load_image("stop.png"), 150, 150, stop_game]])
+    menu = Menu(surf, [[load_image("pause.png", colorkey="white"), 150, 50, unpause],
+                       [load_image("stop.png", colorkey="white"), 150, 210, stop_game]])
     while running_pause:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -860,10 +881,10 @@ def stop_dead_screen():
 def dead_screen():
     global dead_screen_run, plaer, COINS
     surf = pygame.sprite.Sprite()
-    surf.image = pygame.Surface((width, height))
-    surf.image.fill("gray")
+    surf.image = load_image("fone.png")
+
     surf.rect = surf.image.get_rect()
-    menu = Menu(surf, [[load_image("next.png"), 10, 450, stop_dead_screen]])
+    menu = Menu(surf, [[load_image("next.png", colorkey="white"), 200, 450, stop_dead_screen]])
     dead_screen_run = True
     counter1 = 0
     counter2 = 0
@@ -901,10 +922,10 @@ def dead_screen():
                           (180, 0, 0))
         text4 = f1.render(text[3][:counter4 // 10], True,
                           (180, 0, 0))
-        sc.blit(text1, (10, 10))
-        sc.blit(text2, (10, 110))
-        sc.blit(text3, (10, 210))
-        sc.blit(text4, (10, 310))
+        sc.blit(text1, (90, 50))
+        sc.blit(text2, (90, 150))
+        sc.blit(text3, (90, 250))
+        sc.blit(text4, (90, 350))
         pygame.display.flip()
 
 
@@ -916,10 +937,9 @@ def stop_aboute_razrabotchikav():
 def aboute_razrabotchikav():
     global aboute_razrabotchikav_run, plaer
     surf = pygame.sprite.Sprite()
-    surf.image = pygame.Surface((width, height))
-    surf.image.fill("cyan")
+    surf.image = load_image("fone.png")
     surf.rect = surf.image.get_rect()
-    menu = Menu(surf, [[load_image("next.png"), 10, 450, stop_aboute_razrabotchikav]])
+    menu = Menu(surf, [[load_image("next.png", colorkey="white"), 210, 450, stop_aboute_razrabotchikav]])
     aboute_razrabotchikav_run = True
     counter1 = 0
     counter2 = 0
@@ -928,7 +948,7 @@ def aboute_razrabotchikav():
     text = [f"Над игрой работали: ",
             f"Ну тут напишите свои имена",
             f"И тут",
-            f"Александ Кудря - Разработка движка, и его допиливание"]
+            f"Александ Кудря - Разработка движка"]
     while aboute_razrabotchikav_run:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -956,25 +976,38 @@ def aboute_razrabotchikav():
                           (180, 180, 0))
         text4 = f1.render(text[3][:counter4 // 10], True,
                           (180, 180, 0))
-        sc.blit(text1, (10, 10))
-        sc.blit(text2, (10, 110))
-        sc.blit(text3, (10, 210))
-        sc.blit(text4, (10, 310))
+        sc.blit(text1, (90, 50))
+        sc.blit(text2, (90, 150))
+        sc.blit(text3, (90, 250))
+        sc.blit(text4, (90, 350))
         pygame.display.flip()
 
 
-ARTEFACTS = [[load_image("Artefact\gold_heard.png"), {"health_max": "1"}],
-             [load_image("Artefact\\banana_sword.png"), {"damage": "self.damage"}],
-             [load_image("Artefact\\ne_poza_a_sahar.png"), {"speed_x": "3"}],
-             [load_image("Artefact\\maslo.png"), {"obj_spd": "4", "speed_x": "-1"}],
-             [load_image("Artefact\\headset.png"), {"obj_live": "3"}],
-             [load_image("Artefact\\udlenitel_ruki.png"), {"obj_heigth": "30", "damage": "-1"}],
-             [load_image("Artefact\\invizibility_powder.png"), {"invisibility_counter_max": "self.invisibility_counter_max"}],
-             [load_image("Artefact\\coin.png"), {"coins": "1000"}]]
+ARTEFACTS = [[load_image("Artefact\gold_heard.png", colorkey="black"), {"health_max": "1"}],
+             [load_image("Artefact\\banana_sword.png", colorkey="black"), {"damage": "self.damage"}],
+             [load_image("Artefact\\ne_poza_a_sahar.png", colorkey="black"), {"speed_x": "3"}],
+             [load_image("Artefact\\maslo.png", colorkey="black"), {"obj_spd": "4", "speed_x": "-1"}],
+             [load_image("Artefact\\headset.png", colorkey="black"), {"obj_live": "3"}],
+             [load_image("Artefact\\udlenitel_ruki.png", colorkey="black"), {"obj_heigth": "30", "damage": "-1"}],
+             [load_image("Artefact\\invizibility_powder.png", colorkey="black"),
+                                                        {"invisibility_counter_max": "self.invisibility_counter_max"}],
+             [load_image("Artefact\\coin.png", colorkey="black"), {"coins": "1000"}]]
 
-ALL_CHARACTERS = [[(10, 10), Sword, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
-                  [(10, 10), Bow, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")],
-                  [(10, 10), Gun, load_image("characters\hero_right.jpg"), load_image("characters\hero_left.jpg")]]
+ALL_CHARACTERS = [[(10, 10), Sword, {"static": load_image("characters\\sworder_right.png", colorkey="white"),
+                                     "run": [load_image(f"characters\\run_sworder\\{i}", colorkey="white") for i
+                                             in os.listdir("data\\characters\\run_sworder")],
+                                     "attac": [load_image(f"characters\\sworder_attac\\{i}", colorkey="white") for i
+                                             in os.listdir("data\\characters\\sworder_attac")]}],
+                  [(10, 10), Bow, {"static": load_image("characters\\archer.png", colorkey="white"),
+                                     "run": [load_image(f"characters\\run_archer\\{i}", colorkey="white") for i
+                                             in os.listdir("data\\characters\\run_archer")],
+                                     "attac": [load_image(f"characters\\archer_attac\\{i}", colorkey="white") for i
+                                             in os.listdir("data\\characters\\archer_attac")]}],
+                  [(10, 10), Gun, {"static": load_image("characters\\guner.png", colorkey="white"),
+                                   "run": [load_image(f"characters\\run_guner\\{i}", colorkey="white") for i
+                                           in os.listdir("data\\characters\\run_guner")],
+                                   "attac": [load_image(f"characters\\guner_attac\\{i}", colorkey="white") for i
+                                             in os.listdir("data\\characters\\guner_attac")]}]]
 
 ENEMY_ANIMATIONS = {"RUN": "Enemies\\run",
                     "ATTACK": "Enemies\\attack"}
